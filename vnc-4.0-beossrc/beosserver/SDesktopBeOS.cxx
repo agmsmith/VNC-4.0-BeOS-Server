@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.21 2005/01/02 21:57:29 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.22 2005/01/02 23:57:17 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.22  2005/01/02 23:57:17  agmsmith
+ * Fixed up control keys to avoid using the defective BeOS keyboard
+ * mapping, which maps control-D to the End key and other similar
+ * problems.
+ *
  * Revision 1.21  2005/01/02 21:57:29  agmsmith
  * Made the event injector simpler - only need one device, not
  * separate ones for keyboard and mouse.  Also renamed it to
@@ -433,16 +438,10 @@ SDesktopBeOS::SDesktopBeOS () :
   m_LastMouseDownTime (0),
   m_LastMouseX (-1.0F),
   m_LastMouseY (-1.0F),
-  m_ServerPntr (NULL),
-  m_TemporaryBitmap (rfb::PixelFormat(), 256, 32),
-  m_UpdateCount (0),
-  m_UpdateMode (UPDATE_NORMAL)
+  m_ServerPntr (NULL)
 {
   get_click_speed (&m_DoubleClickTimeLimit);
   memset (&m_LastKeyState, 0, sizeof (m_LastKeyState));
-  m_TemporaryBitmap.fillRect (
-    rfb::Rect (0, 0, m_TemporaryBitmap.width(), m_TemporaryBitmap.height()),
-    12345 /* a brownish colour in 8 bit RGB */);
 }
 
 
@@ -491,60 +490,15 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
     // it is (no going past the end of video memory and causing a crash).
 
     OldScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-
-    if (m_FrameBufferBeOSPntr->UpdatePixelFormatEtc () !=
-    ScreenFormatSerialNumber)
-      vlog.debug ("SDesktopBeOS::SendScreenUpdateData: "
-      "Screen pixel format serial number has changed unexpectedly!  "
-      "Possibly a bug in the OS where it changes the screen memory "
-      "pointer, ignoring our lock.");
-
+    m_FrameBufferBeOSPntr->UpdatePixelFormatEtc ();
     NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
 
     if (!NewScreenFormat.equal(OldScreenFormat) ||
     Width != m_FrameBufferBeOSPntr->width () ||
     Height != m_FrameBufferBeOSPntr->height ())
     {
-      // The screen size or resolution has changed.  Since VNC is kind of dumb
-      // at noticing a change, force it to a temporary totally different
-      // resolution and size, then change it to the new size later.
-
-      m_ServerPntr->setPixelBuffer (&m_TemporaryBitmap);
-      m_UpdateMode = UPDATE_SHOWING_TEMPORARY;
-      m_UpdateCount = 0;
-    }
-    else if (m_UpdateMode == UPDATE_SHOWING_TEMPORARY)
-    {
-      // While we're waiting for things to settle down, display a rectangle
-      // that's changing from black to yellow as time goes on.  Then
-      // gradually switch to the new screen.
-
-      if (m_UpdateCount == 8)
-      {
-        // Safe to switch back to normal - resolution hasn't changed recently.
-        // This will trigger a full screen update too, which takes a while.
-        m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
-      }
-      else if (m_UpdateCount == 9)
-        m_ServerPntr->tryUpdate ();
-      else if (m_UpdateCount >= 10)
-      {
-        m_BackgroundNextScanLineY = -1; // Start background updates over again.
-        m_UpdateMode = UPDATE_NORMAL;
-      }
-      else
-      {
-        // Draw a colourful rectangle.
-        RectangleToUpdate.setXYWH (0, 0,
-          m_TemporaryBitmap.width(), m_TemporaryBitmap.height());
-        m_TemporaryBitmap.fillRect (RectangleToUpdate,
-          m_UpdateCount * (1 + 8));
-        rfb::Region RegionChanged (RectangleToUpdate);
-        m_ServerPntr->add_changed (RegionChanged);
-        m_ServerPntr->tryUpdate ();
-      }
-      m_UpdateCount++;
-      snooze (100000);
+      // This will trigger a full screen update too, which takes a while.
+      m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
     }
     else // No screen change, try an update.
     {
@@ -575,6 +529,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
 
         m_BackgroundNextScanLineY = 0;
         m_BackgroundUpdateStartTime = system_time ();
+        m_FrameBufferBeOSPntr->GrabScreen ();
       }
 
       // Mark the current work unit of scan lines as needing an update.
@@ -606,12 +561,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
   // Do the debug printing outside the lock, since printing goes through the
   // windowing system, which needs access to the screen.
 
-  if (m_UpdateMode == UPDATE_SHOWING_TEMPORARY)
-  {
-    sprintf (TempString, "Mode %d Switch", m_UpdateCount);
-    m_FrameBufferBeOSPntr->SetDisplayMessage (TempString);
-  }
-  else if (OldUpdateSize != 0) // If a full screen update has been finished.
+  if (OldUpdateSize != 0) // If a full screen update has been finished.
   {
     if (OldUpdateSize != m_BackgroundNumberOfScanLinesPerUpdate)
       vlog.debug ("Background update size changed from %d to %d scan lines "
@@ -1102,8 +1052,40 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
 {
   vlog.debug ("start called.");
 
+  // Try various different techniques for reading the screen, their
+  // constructors will fail if they aren't supported.
+
   if (m_FrameBufferBeOSPntr == NULL)
-    m_FrameBufferBeOSPntr = new FrameBufferBeOS;
+  {
+    try
+    {
+      m_FrameBufferBeOSPntr = new FrameBufferBDirect;
+    }
+    catch (rdr::Exception &e)
+    {
+      vlog.error(e.str());
+      m_FrameBufferBeOSPntr = NULL;
+    }
+  }
+
+  if (m_FrameBufferBeOSPntr == NULL)
+  {
+    try
+    {
+      m_FrameBufferBeOSPntr = new FrameBufferBScreen;
+    }
+    catch (rdr::Exception &e)
+    {
+      vlog.error(e.str());
+      m_FrameBufferBeOSPntr = NULL;
+    }
+  }
+
+  if (m_FrameBufferBeOSPntr == NULL)
+    throw rdr::Exception ("Unable to find any screen reading techniques "
+    "which are compatible with your video card.  Try a different video card?",
+    "SDesktopBeOS::start");
+
   m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
 
   if (m_EventInjectorPntr == NULL)

@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.11 2005/01/02 21:05:33 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.12 2005/01/02 21:57:29 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.12  2005/01/02 21:57:29  agmsmith
+ * Made the event injector simpler - only need one device, not
+ * separate ones for keyboard and mouse.  Also renamed it to
+ * InputEventInjector to be in line with it's more general use.
+ *
  * Revision 1.11  2005/01/02 21:05:33  agmsmith
  * Found screen resolution bug - wasn't testing the screen width
  * or height to detect a change, just depth.  Along the way added
@@ -207,21 +212,4 @@ protected:
   rfb::VNCServer *m_ServerPntr;
     // Identifies our server, which we can tell about our frame buffer and
     // other changes.  NULL if it hasn't been set yet.
-
-  rfb::ManagedPixelBuffer m_TemporaryBitmap;
-    // A small 16 by 16 pixel by 8 bits true colour bitmap that is used when
-    // the main bitmap has changed, instead of the main screen, so that VNC
-    // notices that the screen has changed.
-
-  int m_UpdateCount;
-    // Number of updates which have gone by safely.  We need a few when
-    // switching video modes to make sure that the other end has received all
-    // the data about the temporary bitmap.
-
-  enum UpdatesEnum {UPDATE_NORMAL = 0, UPDATE_SHOWING_TEMPORARY, UPDATE_MAX}
-    m_UpdateMode;
-    // Controls which bitmap is displayed by the desktop.  When the screen
-    // mode changes, we show the temporary bitmap for a little while until
-    // VNC has sent out the codes for changing video modes, before we let it
-    // resume displaying real data.
 };
