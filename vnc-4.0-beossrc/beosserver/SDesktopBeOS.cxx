@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.22 2005/01/02 23:57:17 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.23 2005/02/06 22:03:10 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.23  2005/02/06 22:03:10  agmsmith
+ * Changed to use the new BScreen reading method if the
+ * BDirectWindow one doesn't work.  Also removed the screen
+ * mode slow change with the yellow bar fake screen.
+ *
  * Revision 1.22  2005/01/02 23:57:17  agmsmith
  * Fixed up control keys to avoid using the defective BeOS keyboard
  * mapping, which maps control-D to the End key and other similar
@@ -129,6 +134,7 @@
 
 /* BeOS (Be Operating System) headers. */
 
+#include <Clipboard.h>
 #include <DirectWindow.h>
 #include <Input.h> // For BInputDevice.
 #include <Locker.h>
@@ -573,6 +579,22 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
     UpdateCounter++;
     sprintf (TempString, "Update #%d", UpdateCounter);
     m_FrameBufferBeOSPntr->SetDisplayMessage (TempString);
+  }
+}
+
+void SDesktopBeOS::clientCutText (const char* str, int len)
+{
+  BMessage *ClipMsgPntr;
+  if (be_clipboard->Lock())
+  {
+    be_clipboard->Clear ();
+    if ((ClipMsgPntr = be_clipboard->Data ()) != NULL)
+    {
+      ClipMsgPntr->AddData ("text/plain", B_MIME_TYPE,
+        str, len);
+      be_clipboard->Commit ();
+    }
+    be_clipboard->Unlock ();
   }
 }
 

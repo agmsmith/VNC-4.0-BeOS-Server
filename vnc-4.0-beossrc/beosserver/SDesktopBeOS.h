@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.12 2005/01/02 21:57:29 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.13 2005/02/06 22:03:10 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.13  2005/02/06 22:03:10  agmsmith
+ * Changed to use the new BScreen reading method if the
+ * BDirectWindow one doesn't work.  Also removed the screen
+ * mode slow change with the yellow bar fake screen.
+ *
  * Revision 1.12  2005/01/02 21:57:29  agmsmith
  * Made the event injector simpler - only need one device, not
  * separate ones for keyboard and mouse.  Also renamed it to
@@ -97,6 +102,10 @@ public:
     // change.  It has a dynamic algorithm which tries to make the updates
     // small enough so that around 25 updates get done per second, including
     // network transmission time.
+
+  virtual void clientCutText (const char* str, int len);
+    // The client has placed some new text on the clipboard.  Update the local
+    // clipboard to match it.
 
   uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
     // Check all the keys in the given array of strings for each keycode to
