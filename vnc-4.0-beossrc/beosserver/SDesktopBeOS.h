@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.2 2004/07/05 00:53:32 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.3 2004/07/19 22:30:19 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.3  2004/07/19 22:30:19  agmsmith
+ * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
+ *
  * Revision 1.2  2004/07/05 00:53:32  agmsmith
  * Added mouse event handling - break down the network mouse event into
  * individual BMessages for the different mouse things, including the
@@ -83,6 +86,13 @@ public:
   virtual void keyEvent (rdr::U32 key, bool down);
     // The remote user has pressed a key.
 
+  void UpdateDerivedModifiersAndPressedModifierKeys (key_info &KeyState);
+    // Looks at the modifier flags for individual modifier keys (left and right
+    // control, L&R shift, etc) and sets the derived modifier flags (plain
+    // control, plain shift, etc) to match.  Then it updates the keyboard bits
+    // to show the corresponding buttons being pressed down or up (using the
+    // previously obtained keymap).
+
 protected:
   class FrameBufferBeOS *m_FrameBufferBeOSPntr;
     // Our FrameBufferBeOS instance and the associated BDirectWindowReader
@@ -95,6 +105,22 @@ protected:
     // keyboard event messages.  NULL if the connection isn't open or isn't
     // available.  Connected when the desktop starts, disconnected when it
     // stops.
+
+  char    *m_KeyCharStrings;
+  key_map *m_KeyMapPntr;
+    // NULL if not in use, otherwise they point to our copy (call free() when
+    // done) of the keyboard mapping strings and tables that convert keyboard
+    // scan codes into UTF-8 strings and various other keyboard mode
+    // operations.  We actually use the tables in reverse to figure out which
+    // buttons to press.  The keymap is copied from the current active one when
+    // the desktop starts, so it doesn't reflect changes to the keymap while it
+    // is running.
+
+  key_info m_LastKeyState;
+    // Identifies which of the 127 keys are currently being held down on the
+    // imaginary ghost of the user's keyboard (using the current keymap to
+    // figure out which keys do what).  Also remembers the modifier modes (caps
+    // lock etc) last in use.
 
   rdr::U8 m_LastMouseButtonState;
     // The mouse buttons from the last remote mouse update.  Needed since
