@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.16 2004/12/13 03:57:37 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.17 2005/01/01 20:34:34 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.17  2005/01/01 20:34:34  agmsmith
+ * Swap control and alt keys if the user's keymap has them swapped.
+ * Since it uses a physical key code (92) to detect the left control
+ * key, it won't work on all keyboards, just US standard.
+ *
  * Revision 1.16  2004/12/13 03:57:37  agmsmith
  * Combined functions for doing background update with grabbing the
  * screen memory.  Also limit update size to at least 4 scan lines.
@@ -612,18 +617,26 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     case XK_Num_Lock: ChangedModifiers = B_NUM_LOCK; break;
     case XK_Shift_L: ChangedModifiers = B_LEFT_SHIFT_KEY; break;
     case XK_Shift_R: ChangedModifiers = B_RIGHT_SHIFT_KEY; break;
-    case XK_Control_L: ChangedModifiers = // Are alt/control swapped?
-      ((m_KeyMapPntr->left_control_key == 92 /* usual control key is 92 */) ?
+    
+     // Are alt/control swapped?  The menu preference does it by swapping the
+     // keycodes in the keymap (couldn't find any other way of detecting it).
+     // The usual left control key is 92, and left alt is 93.  Usual means on
+     // the standard US keyboard layout.  Other keyboards may have other
+     // physical key codes for control and alt, so the default is to have alt
+     // be the command key and control be the control key.
+     case XK_Control_L: ChangedModifiers =
+      ((m_KeyMapPntr->left_control_key != 93) ?
       B_LEFT_CONTROL_KEY : B_LEFT_COMMAND_KEY); break;
     case XK_Control_R: ChangedModifiers =
-      ((m_KeyMapPntr->left_control_key == 92) ?
+      ((m_KeyMapPntr->left_control_key != 93) ?
       B_RIGHT_CONTROL_KEY : B_RIGHT_COMMAND_KEY); break;
     case XK_Alt_L: ChangedModifiers =
-      ((m_KeyMapPntr->left_control_key == 92) ?
+      ((m_KeyMapPntr->left_control_key != 93) ?
       B_LEFT_COMMAND_KEY : B_LEFT_CONTROL_KEY); break;
     case XK_Alt_R: ChangedModifiers =
-      ((m_KeyMapPntr->left_control_key == 92) ?
+      ((m_KeyMapPntr->left_control_key != 93) ?
       B_RIGHT_COMMAND_KEY : B_RIGHT_CONTROL_KEY); break;
+
     case XK_Meta_L: ChangedModifiers = B_LEFT_OPTION_KEY; break;
     case XK_Meta_R: ChangedModifiers = B_RIGHT_OPTION_KEY; break;
     default: ChangedModifiers = 0;
