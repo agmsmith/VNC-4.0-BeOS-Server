@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.6 2004/11/27 22:52:42 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.7 2004/12/13 03:13:39 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.7  2004/12/13 03:13:39  agmsmith
+ * Found the 8 bit mode problem - the colour palette uses
+ * 16 bit values for R, G, B components, not 8 bit.
+ *
  * Revision 1.6  2004/11/27 22:52:42  agmsmith
  * Not much - display string should be shorter.
  *
@@ -55,6 +59,7 @@
 
 /* BeOS (Be Operating System) headers. */
 
+#include <Bitmap.h>
 #include <DirectWindow.h>
 #include <Locker.h>
 #include <Screen.h>
@@ -77,17 +82,6 @@ static rfb::LogWriter vlog("FrameBufferBeOS");
  * This wraps the VNC colour map around the BeOS colour map.  It's a pretty
  * passive class, so other people do things to it to change the values.
  */
-
-class ColourMapHolder : public rfb::ColourMap
-{
-public:
-  virtual void lookup (int index, int* r, int* g, int* b);
-
-  color_map m_BeOSColourMap;
-    // The actual BeOS colour map to use.  Copied from the current screen
-    // palette.
-};
-
 
 void ColourMapHolder::lookup (int index, int* r, int* g, int* b)
 {
@@ -354,16 +348,60 @@ void BDirectWindowReader::UnlockSettings ()
 
 
 /******************************************************************************
- * Implementation of the FrameBufferBeOS class.  Constructor, destructor and
- * the rest of the member functions in mostly alphabetical order.
+ * Implementation of the FrameBufferBeOS abstract base class.  Constructor,
+ * destructor and the rest of the member functions in mostly alphabetical
+ * order.
  */
 
 FrameBufferBeOS::FrameBufferBeOS () :
-  m_ReaderWindowPntr (NULL),
   m_CachedPixelFormatVersion (0),
   m_CachedStride (0)
 {
-  vlog.debug ("Constructing a FrameBufferBeOS object.");
+}
+
+
+FrameBufferBeOS::~FrameBufferBeOS ()
+{
+}
+
+
+int FrameBufferBeOS::getStride () const
+{
+  return m_CachedStride;
+}
+
+
+void  FrameBufferBeOS::GrabScreen ()
+{
+}
+
+
+unsigned int FrameBufferBeOS::LockFrameBuffer ()
+{
+  return 0;
+}
+
+
+void FrameBufferBeOS::UnlockFrameBuffer ()
+{
+}
+
+
+void FrameBufferBeOS::SetDisplayMessage (const char *StringPntr)
+{
+}
+
+
+
+/******************************************************************************
+ * Implementation of the FrameBufferBDirect class.  Constructor, destructor and
+ * the rest of the member functions in mostly alphabetical order.
+ */
+
+FrameBufferBDirect::FrameBufferBDirect () :
+  m_ReaderWindowPntr (NULL)
+{
+  vlog.debug ("Constructing a FrameBufferBDirect object.");
 
   if (BDirectWindow::SupportsWindowMode ())
   {
@@ -379,13 +417,13 @@ FrameBufferBeOS::FrameBufferBeOS () :
   else
     throw rdr::Exception ("Windowed mode not supported for BDirectWindow, "
       "maybe your graphics card needs DMA support and a hardware cursor",
-      "FrameBufferBeOS");
+      "FrameBufferBDirect");
 }
 
 
-FrameBufferBeOS::~FrameBufferBeOS ()
+FrameBufferBDirect::~FrameBufferBDirect ()
 {
-  vlog.debug ("Destroying a FrameBufferBeOS object.");
+  vlog.debug ("Destroying a FrameBufferBDirect object.");
 
   if (m_ReaderWindowPntr != NULL)
   {
@@ -396,13 +434,7 @@ FrameBufferBeOS::~FrameBufferBeOS ()
 }
 
 
-int FrameBufferBeOS::getStride () const
-{
-  return m_CachedStride;
-}
-
-
-unsigned int FrameBufferBeOS::LockFrameBuffer ()
+unsigned int FrameBufferBDirect::LockFrameBuffer ()
 {
   if (m_ReaderWindowPntr != NULL)
     return m_ReaderWindowPntr->LockSettings ();
@@ -410,14 +442,14 @@ unsigned int FrameBufferBeOS::LockFrameBuffer ()
 }
 
 
-void FrameBufferBeOS::UnlockFrameBuffer ()
+void FrameBufferBDirect::UnlockFrameBuffer ()
 {
   if (m_ReaderWindowPntr != NULL)
     m_ReaderWindowPntr->UnlockSettings ();
 }
 
 
-void FrameBufferBeOS::SetDisplayMessage (const char *StringPntr)
+void FrameBufferBDirect::SetDisplayMessage (const char *StringPntr)
 {
   if (m_ReaderWindowPntr != NULL)
   {
@@ -428,7 +460,7 @@ void FrameBufferBeOS::SetDisplayMessage (const char *StringPntr)
 }
 
 
-unsigned int FrameBufferBeOS::UpdatePixelFormatEtc ()
+unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
 {
   direct_buffer_info *DirectInfoPntr;
   unsigned int        EndianTest;
@@ -546,7 +578,7 @@ unsigned int FrameBufferBeOS::UpdatePixelFormatEtc ()
     height_ = (int) (m_ReaderWindowPntr->m_ScreenSize.bottom -
       m_ReaderWindowPntr->m_ScreenSize.top + 1.5);
 
-    // Update the cached stride value.
+    // Update the cached stride value.  Units are pixels, not bytes!
 
     if (DirectInfoPntr->bits_per_pixel <= 0)
       m_CachedStride = 0;
@@ -568,6 +600,190 @@ unsigned int FrameBufferBeOS::UpdatePixelFormatEtc ()
       sizeof (TempString) - strlen (TempString));
     vlog.debug (TempString);
   }
+
+  return m_CachedPixelFormatVersion;
+}
+
+
+
+/******************************************************************************
+ * Implementation of the FrameBufferBScreen class.  Constructor, destructor and
+ * the rest of the member functions in mostly alphabetical order.
+ */
+
+FrameBufferBScreen::FrameBufferBScreen ()
+: m_BScreenPntr (NULL),
+  m_ScreenCopyPntr (NULL)
+{
+  m_BScreenPntr = new BScreen (B_MAIN_SCREEN_ID);
+  if (!m_BScreenPntr->IsValid ())
+    throw rdr::Exception ("Creation of a new BScreen object has failed",
+      "FrameBufferBScreen::FrameBufferBScreen");
+  UpdatePixelFormatEtc ();
+  GrabScreen ();
+}
+
+
+FrameBufferBScreen::~FrameBufferBScreen ()
+{
+  delete m_ScreenCopyPntr;
+  delete m_BScreenPntr;
+}
+
+
+void FrameBufferBScreen::GrabScreen ()
+{
+  m_BScreenPntr->ReadBitmap (m_ScreenCopyPntr);
+}
+
+
+unsigned int FrameBufferBScreen::UpdatePixelFormatEtc ()
+{
+  BRect        BScreenFrame;
+  int          BScreenHeight;
+  int          BScreenWidth;
+  color_space  BScreenColourSpace;
+  unsigned int EndianTest;
+
+  // Grab current general screen settings from the OS.
+
+  BScreenColourSpace = m_BScreenPntr->ColorSpace (); // B_RGB_15 etc.
+  BScreenFrame = m_BScreenPntr->Frame ();
+  BScreenHeight = (int) (BScreenFrame.Height() + 1.5F);
+  BScreenWidth = (int) (BScreenFrame.Width() + 1.5F);
+
+  // If they are different than the screen image bitmap, reallocate the bitmap
+  // and store away the current palette (presumably the palette rarely changes
+  // on its own).
+
+  if (m_ScreenCopyPntr == NULL ||
+  m_ScreenCopyPntr->Bounds().Height() + 1 != BScreenHeight ||
+  m_ScreenCopyPntr->Bounds().Width() + 1 != BScreenWidth ||
+  m_ScreenCopyPntr->ColorSpace() != BScreenColourSpace)
+  {
+  	delete m_ScreenCopyPntr;
+  	m_ScreenCopyPntr = new BBitmap (
+  	  BRect (0, 0, BScreenWidth - 1, BScreenHeight - 1),
+  	  BScreenColourSpace);
+  	if (!m_ScreenCopyPntr->IsValid ())
+      throw rdr::Exception ("BBitmap allocation failed for new screen size",
+      "FrameBufferBScreen::UpdatePixelFormatEtc");
+    memcpy (&m_ColourMap.m_BeOSColourMap,
+      m_BScreenPntr->ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
+    colourmap = &m_ColourMap;
+    m_CachedPixelFormatVersion++; // Things have changed.
+  }
+
+  // Set up some initial default values.  The actual values will be put in
+  // depending on the particular video mode.
+
+  format.bpp = 24;
+    // Number of actual colour bits, excluding alpha and pad bits.
+  format.depth = 24;
+  format.trueColour = true; // It usually is a non-palette video mode.
+
+  EndianTest = 1;
+  format.bigEndian = ((* (unsigned char *) &EndianTest) == 0);
+
+  format.blueShift = 0;
+  format.greenShift = 8;
+  format.redShift = 16;
+  format.redMax = format.greenMax = format.blueMax = 255;
+
+  // Now set it according to the actual screen format.
+
+  switch (BScreenColourSpace)
+  {
+    case B_RGB32: // xRGB 8:8:8:8, stored as little endian uint32
+    case B_RGBA32: // ARGB 8:8:8:8, stored as little endian uint32
+      format.bpp = 32;
+      format.depth = 24;
+      format.blueShift = 0;
+      format.greenShift = 8;
+      format.redShift = 16;
+      format.redMax = format.greenMax = format.blueMax = 255;
+      break;
+
+    case B_RGB24:
+      format.bpp = 24;
+      format.depth = 24;
+      format.blueShift = 0;
+      format.greenShift = 8;
+      format.redShift = 16;
+      format.redMax = format.greenMax = format.blueMax = 255;
+      break;
+
+    case B_RGB16: // xRGB 5:6:5, stored as little endian uint16
+      format.bpp = 16;
+      format.depth = 16;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 11;
+      format.redMax = 31;
+      format.greenMax = 63;
+      format.blueMax = 31;
+      break;
+
+    case B_RGB15: // RGB 1:5:5:5, stored as little endian uint16
+    case B_RGBA15: // ARGB 1:5:5:5, stored as little endian uint16
+      format.bpp = 16;
+      format.depth = 15;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 10;
+      format.redMax = format.greenMax = format.blueMax = 31;
+      break;
+
+    case B_CMAP8: // 256-color index into the color table.
+    case B_GRAY8: // 256-color greyscale value.
+      format.bpp = 8;
+      format.depth = 8;
+      format.blueShift = 0;
+      format.greenShift = 0;
+      format.redShift = 0;
+      format.redMax = 255;
+      format.greenMax = 255;
+      format.blueMax = 255;
+      format.trueColour = false;
+      break;
+
+    case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
+    case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
+    case B_RGB24_BIG: // Currently unused
+    case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
+    case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
+    case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
+      vlog.error ("Unimplemented big endian video mode #%d in "
+      "UpdatePixelFormatEtc.",
+      (unsigned int) BScreenColourSpace);
+      break;
+
+    default:
+      vlog.error ("Unimplemented video mode #%d in UpdatePixelFormatEtc.",
+      (unsigned int) BScreenColourSpace);
+      break;
+  }
+
+  // Also update the real data - the actual bits and buffer size.
+
+  data = (rdr::U8 *) m_ScreenCopyPntr->Bits ();
+  m_CachedStride = m_ScreenCopyPntr->BytesPerRow() / ((format.bpp + 7) / 8);
+  width_ = BScreenWidth;
+  height_ = BScreenHeight;
+
+  // Print out the new settings.  May cause a deadlock if you happen to be
+  // printing this when the video mode is switching, since the AppServer
+  // would be locked out and unable to display the printed text.  But
+  // that only happens in debug mode.
+
+  char TempString [2048];
+  sprintf (TempString,
+    "UpdatePixelFormatEtc new settings: "
+    "Width=%d, Stride=%d, Height=%d, Bits at $%08X, ",
+    width_, m_CachedStride, height_, (unsigned int) data);
+  format.print (TempString + strlen (TempString),
+    sizeof (TempString) - strlen (TempString));
+  vlog.debug (TempString);
 
   return m_CachedPixelFormatVersion;
 }
