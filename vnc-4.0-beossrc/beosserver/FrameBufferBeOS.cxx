@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.7 2004/12/13 03:13:39 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.8 2005/02/06 21:31:13 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.8  2005/02/06 21:31:13  agmsmith
+ * Split frame buffer class into two parts, one for the old BDirectWindow
+ * screen reading technique, and another for the new BScreen method.
+ *
  * Revision 1.7  2004/12/13 03:13:39  agmsmith
  * Found the 8 bit mode problem - the colour palette uses
  * 16 bit values for R, G, B components, not 8 bit.
@@ -183,9 +187,6 @@ public:
   virtual void ScreenChanged (BRect frame, color_space mode);
     // Informs the window about a screen resolution change.
 
-  void SetDisplayString (const char *NewString);
-    // Sets the one line of text that's displayed by the status window.
-
   ColourMapHolder m_ColourMap;
     // The colour map for this window (and screen) when it is in palette mode.
 
@@ -221,16 +222,6 @@ public:
   BRect m_ScreenSize;
     // The size of the screen as a rectangle.  Updated when the resolution
     // changes.
-
-protected:
-  char m_DisplayString [20];
-    // This string is displayed in the server status window.  Since we couldn't
-    // hide the window, or make it smaller than 10x10 pixels, we make it a
-    // feature.
-
-  BView *m_StatusDisplayView;
-    // Points to the status display view if it exists (which just draws the
-    // contents of m_DisplayString), NULL otherwise.
 };
 
 
@@ -242,8 +233,7 @@ BDirectWindowReader::BDirectWindowReader ()
     B_ALL_WORKSPACES),
   m_Connected (false),
   m_ConnectionVersion (0),
-  m_DoNotConnect (true),
-  m_StatusDisplayView (NULL)
+  m_DoNotConnect (true)
 {
   BScreen  ScreenInfo (this /* Info for screen this window is on */);
 
@@ -254,10 +244,6 @@ BDirectWindowReader::BDirectWindowReader ()
   memcpy (&m_ColourMap.m_BeOSColourMap,
     ScreenInfo.ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
 
-  strcpy (m_DisplayString, "VNC-BeOS");
-  m_StatusDisplayView = new StatusDisplayBView (Bounds ());
-  ((StatusDisplayBView *) m_StatusDisplayView)->m_StringPntr = m_DisplayString;
-  AddChild (m_StatusDisplayView);
   m_DoNotConnect = false; // Now ready for active operation.
 }
 
@@ -327,19 +313,6 @@ void BDirectWindowReader::ScreenChanged (BRect frame, color_space mode)
 }
 
 
-void BDirectWindowReader::SetDisplayString (const char *NewString)
-{
-  if (NewString == NULL || NewString[0] == 0)
-    m_DisplayString [0] = 0;
-  else
-    strncpy (m_DisplayString, NewString, sizeof (m_DisplayString));
-  m_DisplayString [sizeof (m_DisplayString) - 1] = 0;
-
-  if (m_StatusDisplayView != NULL)
-    m_StatusDisplayView->Invalidate ();
-}
-
-
 void BDirectWindowReader::UnlockSettings ()
 {
   m_ConnectionLock.Unlock ();
@@ -355,13 +328,21 @@ void BDirectWindowReader::UnlockSettings ()
 
 FrameBufferBeOS::FrameBufferBeOS () :
   m_CachedPixelFormatVersion (0),
-  m_CachedStride (0)
+  m_CachedStride (0),
+  m_StatusWindowPntr (NULL)
 {
+  strcpy (m_StatusString, "VNC-BeOS");
 }
 
 
 FrameBufferBeOS::~FrameBufferBeOS ()
 {
+  if (m_StatusWindowPntr != NULL)
+  {
+    m_StatusWindowPntr->Lock ();
+    m_StatusWindowPntr->Quit (); // Closing the window makes it self destruct.
+    m_StatusWindowPntr = NULL;
+  }
 }
 
 
@@ -376,18 +357,45 @@ void  FrameBufferBeOS::GrabScreen ()
 }
 
 
-unsigned int FrameBufferBeOS::LockFrameBuffer ()
+void FrameBufferBeOS::InitialiseStatusView ()
 {
-  return 0;
+  StatusDisplayBView *StatusDisplayViewPntr;
+
+  StatusDisplayViewPntr =
+    new StatusDisplayBView (m_StatusWindowPntr->Bounds ());
+  StatusDisplayViewPntr->m_StringPntr = m_StatusString;
+  m_StatusWindowPntr->AddChild (StatusDisplayViewPntr);
 }
 
 
-void FrameBufferBeOS::UnlockFrameBuffer ()
+unsigned int FrameBufferBeOS::LockFrameBuffer ()
 {
+  return m_CachedPixelFormatVersion;
 }
 
 
 void FrameBufferBeOS::SetDisplayMessage (const char *StringPntr)
+{
+  BView *ChildViewPntr = NULL;
+
+  if (StringPntr == NULL || StringPntr[0] == 0)
+    m_StatusString [0] = 0;
+  else
+    strncpy (m_StatusString, StringPntr, sizeof (m_StatusString));
+  m_StatusString [sizeof (m_StatusString) - 1] = 0;
+
+  if (m_StatusWindowPntr != NULL)
+  {
+    m_StatusWindowPntr->Lock ();
+    ChildViewPntr = m_StatusWindowPntr->ChildAt (0);
+    if (ChildViewPntr != NULL)
+      ChildViewPntr->Invalidate ();
+    m_StatusWindowPntr->Unlock ();
+  }
+}
+
+
+void FrameBufferBeOS::UnlockFrameBuffer ()
 {
 }
 
@@ -398,17 +406,17 @@ void FrameBufferBeOS::SetDisplayMessage (const char *StringPntr)
  * the rest of the member functions in mostly alphabetical order.
  */
 
-FrameBufferBDirect::FrameBufferBDirect () :
-  m_ReaderWindowPntr (NULL)
+FrameBufferBDirect::FrameBufferBDirect ()
 {
   vlog.debug ("Constructing a FrameBufferBDirect object.");
 
   if (BDirectWindow::SupportsWindowMode ())
   {
-    m_ReaderWindowPntr = new BDirectWindowReader;
-    m_ReaderWindowPntr->Show (); // Opens the window and starts its thread.
+    m_StatusWindowPntr = new BDirectWindowReader;
+    m_StatusWindowPntr->Show (); // Opens the window and starts its thread.
     snooze (50000 /* microseconds */);
-    m_ReaderWindowPntr->Sync (); // Wait for it to finish drawing etc.
+    InitialiseStatusView ();
+    m_StatusWindowPntr->Sync (); // Wait for it to finish drawing etc.
     snooze (50000 /* microseconds */);
     LockFrameBuffer ();
     UpdatePixelFormatEtc ();
@@ -424,63 +432,49 @@ FrameBufferBDirect::FrameBufferBDirect () :
 FrameBufferBDirect::~FrameBufferBDirect ()
 {
   vlog.debug ("Destroying a FrameBufferBDirect object.");
-
-  if (m_ReaderWindowPntr != NULL)
-  {
-    m_ReaderWindowPntr->Lock ();
-    m_ReaderWindowPntr->Quit (); // Closing the window makes it self destruct.
-    m_ReaderWindowPntr = NULL;
-  }
 }
 
 
 unsigned int FrameBufferBDirect::LockFrameBuffer ()
 {
-  if (m_ReaderWindowPntr != NULL)
-    return m_ReaderWindowPntr->LockSettings ();
+  if (m_StatusWindowPntr != NULL)
+    return (static_cast<BDirectWindowReader *> (m_StatusWindowPntr))->
+      LockSettings ();
   return 0;
 }
 
 
 void FrameBufferBDirect::UnlockFrameBuffer ()
 {
-  if (m_ReaderWindowPntr != NULL)
-    m_ReaderWindowPntr->UnlockSettings ();
-}
-
-
-void FrameBufferBDirect::SetDisplayMessage (const char *StringPntr)
-{
-  if (m_ReaderWindowPntr != NULL)
-  {
-    m_ReaderWindowPntr->Lock ();
-    m_ReaderWindowPntr->SetDisplayString (StringPntr);
-    m_ReaderWindowPntr->Unlock ();
-  }
+  if (m_StatusWindowPntr != NULL)
+    (static_cast<BDirectWindowReader *> (m_StatusWindowPntr))->
+    UnlockSettings ();
 }
 
 
 unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
 {
-  direct_buffer_info *DirectInfoPntr;
-  unsigned int        EndianTest;
+  BDirectWindowReader *BDirectWindowPntr;
+  direct_buffer_info  *DirectInfoPntr;
+  unsigned int         EndianTest;
 
-  if (m_ReaderWindowPntr == NULL)
+  BDirectWindowPntr = static_cast<BDirectWindowReader *> (m_StatusWindowPntr);
+  if (BDirectWindowPntr == NULL)
   {
     width_ = 0;
     height_ = 0;
     return m_CachedPixelFormatVersion;
   }
 
-  if (m_CachedPixelFormatVersion != m_ReaderWindowPntr->m_ConnectionVersion)
+  if (m_CachedPixelFormatVersion != BDirectWindowPntr->m_ConnectionVersion)
   {
-    m_CachedPixelFormatVersion = m_ReaderWindowPntr->m_ConnectionVersion;
-    DirectInfoPntr = &m_ReaderWindowPntr->m_SavedFrameBufferInfo;
+    m_CachedPixelFormatVersion = BDirectWindowPntr->m_ConnectionVersion;
+    DirectInfoPntr = &BDirectWindowPntr->m_SavedFrameBufferInfo;
 
     // Set up some initial default values.  The actual values will be put in
     // depending on the particular video mode.
 
-    colourmap = &m_ReaderWindowPntr->m_ColourMap;
+    colourmap = &BDirectWindowPntr->m_ColourMap;
 
     format.bpp = DirectInfoPntr->bits_per_pixel;
     // Number of actual colour bits, excluding alpha and pad bits.
@@ -573,10 +567,10 @@ unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
 
     data = (rdr::U8 *) DirectInfoPntr->bits;
 
-    width_ = (int) (m_ReaderWindowPntr->m_ScreenSize.right -
-      m_ReaderWindowPntr->m_ScreenSize.left + 1.5);
-    height_ = (int) (m_ReaderWindowPntr->m_ScreenSize.bottom -
-      m_ReaderWindowPntr->m_ScreenSize.top + 1.5);
+    width_ = (int) (BDirectWindowPntr->m_ScreenSize.right -
+      BDirectWindowPntr->m_ScreenSize.left + 1.5);
+    height_ = (int) (BDirectWindowPntr->m_ScreenSize.bottom -
+      BDirectWindowPntr->m_ScreenSize.top + 1.5);
 
     // Update the cached stride value.  Units are pixels, not bytes!
 
@@ -619,6 +613,21 @@ FrameBufferBScreen::FrameBufferBScreen ()
   if (!m_BScreenPntr->IsValid ())
     throw rdr::Exception ("Creation of a new BScreen object has failed",
       "FrameBufferBScreen::FrameBufferBScreen");
+
+  // Set up the status window.
+
+  m_StatusWindowPntr = new BWindow (BRect (0, 0, 1, 1), "StatusWindow",
+    B_NO_BORDER_WINDOW_LOOK,
+    B_FLOATING_ALL_WINDOW_FEEL,
+    B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AVOID_FOCUS,
+    B_ALL_WORKSPACES);
+  m_StatusWindowPntr->MoveTo (m_BScreenPntr->Frame().LeftTop());
+  m_StatusWindowPntr->ResizeTo (80, 20);
+  m_StatusWindowPntr->Show (); // Opens the window and starts its thread.
+  InitialiseStatusView ();
+
+  // And the pixel format and frame buffer initial contents.
+
   UpdatePixelFormatEtc ();
   GrabScreen ();
 }
@@ -652,27 +661,34 @@ unsigned int FrameBufferBScreen::UpdatePixelFormatEtc ()
   BScreenHeight = (int) (BScreenFrame.Height() + 1.5F);
   BScreenWidth = (int) (BScreenFrame.Width() + 1.5F);
 
-  // If they are different than the screen image bitmap, reallocate the bitmap
-  // and store away the current palette (presumably the palette rarely changes
-  // on its own).
+  // See if anything has changed since last time.
 
-  if (m_ScreenCopyPntr == NULL ||
-  m_ScreenCopyPntr->Bounds().Height() + 1 != BScreenHeight ||
-  m_ScreenCopyPntr->Bounds().Width() + 1 != BScreenWidth ||
-  m_ScreenCopyPntr->ColorSpace() != BScreenColourSpace)
-  {
-  	delete m_ScreenCopyPntr;
-  	m_ScreenCopyPntr = new BBitmap (
-  	  BRect (0, 0, BScreenWidth - 1, BScreenHeight - 1),
-  	  BScreenColourSpace);
-  	if (!m_ScreenCopyPntr->IsValid ())
-      throw rdr::Exception ("BBitmap allocation failed for new screen size",
-      "FrameBufferBScreen::UpdatePixelFormatEtc");
-    memcpy (&m_ColourMap.m_BeOSColourMap,
-      m_BScreenPntr->ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
-    colourmap = &m_ColourMap;
-    m_CachedPixelFormatVersion++; // Things have changed.
-  }
+  if (m_ScreenCopyPntr != NULL &&
+  m_ScreenCopyPntr->Bounds().Height() + 1 == BScreenHeight &&
+  m_ScreenCopyPntr->Bounds().Width() + 1 == BScreenWidth &&
+  m_ScreenCopyPntr->ColorSpace() == BScreenColourSpace)
+    return m_CachedPixelFormatVersion; // Nothing has changed.
+
+  // Changed - reallocate the bitmap and store away the current palette
+  // (presumably the palette rarely changes on its own).
+
+  m_CachedPixelFormatVersion++; // Things have changed.
+
+  delete m_ScreenCopyPntr;
+  m_ScreenCopyPntr = new BBitmap (
+    BRect (0, 0, BScreenWidth - 1, BScreenHeight - 1),
+    BScreenColourSpace);
+  if (!m_ScreenCopyPntr->IsValid ())
+    throw rdr::Exception ("BBitmap allocation failed for new screen size",
+    "FrameBufferBScreen::UpdatePixelFormatEtc");
+  memcpy (&m_ColourMap.m_BeOSColourMap,
+    m_BScreenPntr->ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
+  colourmap = &m_ColourMap;
+
+  // GrabScreen - don't grab here, sometimes it grabs the previous screen
+  // contents before BeOS redraws the new workspace, which wastes
+  // time - better to leave it as newly allocated solid white and let the
+  // normal refresh read the screen later, when its contents are stable.
 
   // Set up some initial default values.  The actual values will be put in
   // depending on the particular video mode.

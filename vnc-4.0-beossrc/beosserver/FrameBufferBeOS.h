@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.5 2004/07/19 22:30:19 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.6 2005/02/06 21:30:43 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.6  2005/02/06 21:30:43  agmsmith
+ * Split frame buffer class into two parts, one for the old BDirectWindow
+ * screen reading technique, and another for the new BScreen method.
+ *
  * Revision 1.5  2004/07/19 22:30:19  agmsmith
  * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
  *
@@ -94,7 +98,7 @@ public:
 
   virtual void SetDisplayMessage (const char *StringPntr);
     // Sets the little bit of text in the corner of the screen that shows
-    // the status of the server.  Default implementation does nothing.
+    // the status of the server.
 
   virtual unsigned int UpdatePixelFormatEtc () = 0;
     // Makes sure the pixel format, width, height, raw bits pointer are
@@ -104,13 +108,30 @@ public:
     // number.
 
 protected:
+  void InitialiseStatusView ();
+    // A utility function for creating the status text BView and adding it to
+    // the status window, telling it to draw its text from this object's
+    // m_StatusString field.
+
   unsigned int m_CachedPixelFormatVersion;
     // This version number helps us quickly detect changes to the video mode,
     // and thus let us avoid setting the pixel format on every frame grab.
-    
+
   unsigned int m_CachedStride;
     // Number of pixels on a whole row.  Equals number of bytes per row
     // (including padding bytes) divided by the number of bytes per pixel.
+
+  char m_StatusString [20];
+    // The currently displayed status message text.  The BView that draws the
+    // status display reads the text out of this area of memory whenever it is
+    // refreshed.
+
+  BWindow *m_StatusWindowPntr;
+    // These are used for the status window, which displays the update counter
+    // in the top left corner of the screen.  The BDirect screen reader also
+    // uses this for its special subclass of BDirectWindow which handles screen
+    // reading and resolution change detection.  NULL if it hasn't been
+    // created.
 };
 
 
@@ -126,13 +147,7 @@ public:
 
   virtual unsigned int LockFrameBuffer ();
   virtual void UnlockFrameBuffer ();
-  virtual void SetDisplayMessage (const char *StringPntr);
   virtual unsigned int UpdatePixelFormatEtc ();
-
-protected:
-  class BDirectWindowReader *m_ReaderWindowPntr;
-    // Our BDirectWindow which is used for accessing the frame buffer.  NULL if
-    // it hasn't been created.
 };
 
 
@@ -159,11 +174,12 @@ protected:
   BScreen *m_BScreenPntr;
     // The link back to the OS for the current screen settings.
 
+  ColourMapHolder m_ColourMap;
+    // A copy of the screen's colour map, made when the pixel format was last
+    // updated.
+
   BBitmap *m_ScreenCopyPntr;
     // A copy of the screen, reallocated whenever the screen size or depth
     // changes, by UpdatePixelFormatEtc.
 
-  ColourMapHolder m_ColourMap;
-    // A copy of the screen's colour map, made when the pixel format was last
-    // updated.
 };
