@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.9 2004/08/23 00:24:17 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.10 2004/08/23 00:51:59 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.10  2004/08/23 00:51:59  agmsmith
+ * Force an update shortly after a key press.
+ *
  * Revision 1.9  2004/08/23 00:24:17  agmsmith
  * Added a search for plain keyboard keys, so now you can type text
  * over VNC!  But funny key combinations likely won't work.
@@ -127,6 +130,37 @@ extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
 static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
 { // Note that this table is in increasing order of VNC key code,
   // so that a binary search can be done.
+  {0x01, "\0x01"},
+  {0x02, "\0x02"},
+  {0x03, "\0x03"},
+  {0x04, "\0x04"},
+  {0x05, "\0x05"},
+  {0x06, "\0x06"},
+  {0x07, "\0x07"},
+  {0x08, "\0x08"},
+  {0x09, "\0x09"},
+  {0x0a, "\0x0a"},
+  {0x0b, "\0x0b"},
+  {0x0c, "\0x0c"},
+  {0x0d, "\0x0d"},
+  {0x0e, "\0x0e"},
+  {0x0f, "\0x0f"},
+  {0x10, "\0x10"},
+  {0x11, "\0x11"},
+  {0x12, "\0x12"},
+  {0x13, "\0x13"},
+  {0x14, "\0x14"},
+  {0x15, "\0x15"},
+  {0x16, "\0x16"},
+  {0x17, "\0x17"},
+  {0x18, "\0x18"},
+  {0x19, "\0x19"},
+  {0x1a, "\0x1a"},
+  {0x1b, "\0x1b"},
+  {0x1c, "\0x1c"},
+  {0x1d, "\0x1d"},
+  {0x1e, "\0x1e"},
+  {0x1f, "\0x1f"},
   {/* 0x0020 */ XK_space, " "},
   {/* 0x0021 */ XK_exclam, "!"},
   {/* 0x0022 */ XK_quotedbl, "\""},
@@ -398,40 +432,7 @@ SDesktopBeOS::~SDesktopBeOS ()
 }
 
 
-uint8 SDesktopBeOS::FindKeyCodeFromMap (
-  int32 *MapOffsetArray,
-  char *KeyAsString)
-{
-  unsigned int KeyCode;
-  int32       *OffsetPntr;
-  char        *StringPntr;
-
-  OffsetPntr = MapOffsetArray + 1 /* Skip over [0]. */;
-  for (KeyCode = 1 /* zero not valid */; KeyCode <= 127;
-  KeyCode++, OffsetPntr++)
-  {
-    StringPntr = m_KeyCharStrings + *OffsetPntr;
-    if (*StringPntr == 0)
-      continue; // Length of string (pascal style with length byte) is zero.
-    if (memcmp (StringPntr + 1, KeyAsString, *StringPntr) == 0 &&
-    KeyAsString [*StringPntr] == 0 /* look for NUL at end of search string */)
-      return KeyCode;
-  }
-  return 0;
-}
-
-
-void SDesktopBeOS::forcedUpdateCheck ()
-{
-  if (system_time () > m_NextForcedUpdateTime)
-  {
-    framebufferUpdateRequest ();
-    m_NextForcedUpdateTime = system_time () + 10000000;
-  }
-}
-
-
-void SDesktopBeOS::framebufferUpdateRequest ()
+void SDesktopBeOS::DoScreenUpdate ()
 {
   rfb::PixelFormat NewScreenFormat;
   rfb::PixelFormat OldScreenFormat;
@@ -475,6 +476,42 @@ void SDesktopBeOS::framebufferUpdateRequest ()
 }
 
 
+uint8 SDesktopBeOS::FindKeyCodeFromMap (
+  int32 *MapOffsetArray,
+  char *KeyAsString)
+{
+  unsigned int KeyCode;
+  int32       *OffsetPntr;
+  char        *StringPntr;
+
+  OffsetPntr = MapOffsetArray + 1 /* Skip over [0]. */;
+  for (KeyCode = 1 /* zero not valid */; KeyCode <= 127;
+  KeyCode++, OffsetPntr++)
+  {
+    StringPntr = m_KeyCharStrings + *OffsetPntr;
+    if (*StringPntr == 0)
+      continue; // Length of string (pascal style with length byte) is zero.
+    if (memcmp (StringPntr + 1, KeyAsString, *StringPntr) == 0 &&
+    KeyAsString [*StringPntr] == 0 /* look for NUL at end of search string */)
+      return KeyCode;
+  }
+  return 0;
+}
+
+
+void SDesktopBeOS::forcedUpdateCheck ()
+{
+  if (system_time () > m_NextForcedUpdateTime)
+    DoScreenUpdate ();
+}
+
+
+void SDesktopBeOS::framebufferUpdateRequest ()
+{
+  m_NextForcedUpdateTime = system_time () + 300000;
+}
+
+
 rfb::Point SDesktopBeOS::getFbSize ()
 {
   vlog.debug ("getFbSize called.");
@@ -505,6 +542,9 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   if (m_InputDeviceKeyboardPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
   m_FrameBufferBeOSPntr->width () <= 0 || m_KeyMapPntr == NULL)
     return;
+
+  vlog.debug ("VNC keycode $%04X received, key is %s.",
+    key, down ? "down" : "up");
 
   // Hack - force a screen update a short time after a key is pressed, since it
   // is likely that the screen will have changed a bit.

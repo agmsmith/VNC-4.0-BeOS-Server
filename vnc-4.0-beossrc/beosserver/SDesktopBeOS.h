@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.5 2004/08/02 15:56:46 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.6 2004/08/23 00:24:17 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.6  2004/08/23 00:24:17  agmsmith
+ * Added a search for plain keyboard keys, so now you can type text
+ * over VNC!  But funny key combinations likely won't work.
+ *
  * Revision 1.5  2004/08/02 15:56:46  agmsmith
  * Alphabetically ordered.
  *
@@ -56,6 +60,10 @@ public:
   SDesktopBeOS ();
   virtual ~SDesktopBeOS ();
 
+  void DoScreenUpdate ();
+    // Does the actual screen update.  Just invalidates the whole screen
+    // area in the server's bitmap thingy.
+  
   uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
     // Check all the keys in the given array of strings for each keycode to
     // see if any contain the given UTF-8 string.  Returns zero if it can't
