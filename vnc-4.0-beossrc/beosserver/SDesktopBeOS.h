@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.6 2004/08/23 00:24:17 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.7 2004/09/13 00:18:27 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.7  2004/09/13 00:18:27  agmsmith
+ * Do updates separately, only based on the timer running out,
+ * so that other events all get processed first before the slow
+ * screen update starts.
+ *
  * Revision 1.6  2004/08/23 00:24:17  agmsmith
  * Added a search for plain keyboard keys, so now you can type text
  * over VNC!  But funny key combinations likely won't work.
@@ -60,24 +65,21 @@ public:
   SDesktopBeOS ();
   virtual ~SDesktopBeOS ();
 
-  void DoScreenUpdate ();
-    // Does the actual screen update.  Just invalidates the whole screen
-    // area in the server's bitmap thingy.
+  void BackgroundScreenUpdateCheck ();
+    // Checks for changes in a portion of the screen.  This gets called
+    // periodically by the server, at most 100 times per second.  It has a
+    // dynamic algorithm which tries to make the updates small enough so that
+    // around 50 updates get done per second, including network transmission
+    // time.
+
+  void SendScreenUpdateData ();
+    // Sends the data for the changed part of the screen and also checks for a
+    // resolution change.
   
   uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
     // Check all the keys in the given array of strings for each keycode to
     // see if any contain the given UTF-8 string.  Returns zero if it can't
     // find it.
-
-  void forcedUpdateCheck ();
-    // Checks if it is time for a forced update, and does it if needed.  This
-    // gets called periodically by the server.
-
-  virtual void framebufferUpdateRequest ();
-    // framebufferUpdateRequest() is called to let the desktop know that at
-    // least one client has become ready for an update.  Desktops can check
-    // whether there are clients ready at any time by calling the VNCServer's
-    // clientsReadyForUpdate() method.
 
   virtual rfb::Point getFbSize ();
     // getFbSize() returns the current dimensions of the framebuffer.
@@ -117,6 +119,23 @@ public:
     // previously obtained keymap).
 
 protected:
+  int m_BackgroundNextScanLineY;
+    // When doing incremental updates of the screen, m_BackgroundNextScanLineY
+    // identifies the next scan line to start checking for changes to the
+    // screen.  If its out of range then a new full screen update is started.
+
+  int m_BackgroundNumberOfScanLinesPerUpdate;
+    // This many scan lines are read from the screen to see if they have
+    // changed.  The number varies depending on the current perfomance,
+    // adjusted at the end of every full screen scan to make the typical update
+    // take only 1/100 of a second.  Minimum value 1, maximum is the height of
+    // the screen.
+
+  bigtime_t m_BackgroundUpdateStartTime;
+    // The system clock at the moment the next full screen scan is started.
+    // Used at the end of the full screen to evaluate performance and help
+    // adjust m_BackgroundNumberOfScanLinesPerUpdate.
+
   class FrameBufferBeOS *m_FrameBufferBeOSPntr;
     // Our FrameBufferBeOS instance and the associated BDirectWindowReader
     // (which may or may not exist) which is used for accessing the frame
@@ -154,11 +173,6 @@ protected:
     // Last absolute (0.0 to 1.0) mouse position reported to BeOS.  Needed so
     // that we can avoid sending redundant mouse moved messages, particularly
     // if the user is moving the mouse wheel or just pressing buttons.
-
-  bigtime_t m_NextForcedUpdateTime;
-    // When the system clock reaches this time, do a full screen refresh.
-    // Needed to awaken dead clients, that seem to stop updating once a button
-    // is pressed.  It is normally some time in the future.
 
   rfb::VNCServer *m_ServerPntr;
     // Identifies our server, which we can tell about our frame buffer and

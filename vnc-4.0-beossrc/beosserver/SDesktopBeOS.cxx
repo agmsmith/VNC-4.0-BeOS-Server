@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.11 2004/09/13 00:18:27 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.12 2004/09/13 01:41:24 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.12  2004/09/13 01:41:24  agmsmith
+ * Trying to get control keys working.
+ *
  * Revision 1.11  2004/09/13 00:18:27  agmsmith
  * Do updates separately, only based on the timer running out,
  * so that other events all get processed first before the slow
@@ -374,6 +377,9 @@ static inline void SetKeyState (
  */
 
 SDesktopBeOS::SDesktopBeOS () :
+  m_BackgroundNextScanLineY (-1),
+  m_BackgroundNumberOfScanLinesPerUpdate (32),
+  m_BackgroundUpdateStartTime (0),
   m_FrameBufferBeOSPntr (NULL),
   m_InputDeviceKeyboardPntr (NULL),
   m_InputDeviceMousePntr (NULL),
@@ -382,7 +388,6 @@ SDesktopBeOS::SDesktopBeOS () :
   m_LastMouseButtonState (0),
   m_LastMouseX (-1.0F),
   m_LastMouseY (-1.0F),
-  m_NextForcedUpdateTime (0),
   m_ServerPntr (NULL)
 {
   memset (&m_LastKeyState, 0, sizeof (m_LastKeyState));
@@ -391,13 +396,13 @@ SDesktopBeOS::SDesktopBeOS () :
 
 SDesktopBeOS::~SDesktopBeOS ()
 {
+  delete m_FrameBufferBeOSPntr;
+  m_FrameBufferBeOSPntr = NULL;
+
   free (m_KeyCharStrings);
   m_KeyCharStrings = NULL;
   free (m_KeyMapPntr);
   m_KeyMapPntr = NULL;
-
-  delete m_FrameBufferBeOSPntr;
-  m_FrameBufferBeOSPntr = NULL;
 
   delete m_InputDeviceKeyboardPntr;
   m_InputDeviceKeyboardPntr = NULL;
@@ -406,50 +411,76 @@ SDesktopBeOS::~SDesktopBeOS ()
 }
 
 
-void SDesktopBeOS::DoScreenUpdate ()
+void SDesktopBeOS::BackgroundScreenUpdateCheck ()
 {
-  rfb::PixelFormat NewScreenFormat;
-  rfb::PixelFormat OldScreenFormat;
-  char             TempString [80];
-  static int       UpdateCounter = 0;
+  bigtime_t  ElapsedTime;
+  int        Height;
+  int        NumberOfUpdates;
+  int        OldUpdateSize;
+  rfb::Rect  RectangleToUpdate;
+  char       TempString [30];
+  static int UpdateCounter = 0;
+  float      UpdatesPerSecond;
+  int        Width;
 
-  if (m_FrameBufferBeOSPntr != NULL)
+  if (m_FrameBufferBeOSPntr == NULL || m_ServerPntr == NULL ||
+  (Width = m_FrameBufferBeOSPntr->width ()) <= 0 ||
+  (Height = m_FrameBufferBeOSPntr->height ()) <= 0)
+    return;
+
+  if (m_BackgroundNextScanLineY < 0 || m_BackgroundNextScanLineY >= Height)
   {
-    m_FrameBufferBeOSPntr->LockFrameBuffer ();
+    // Time to start a new frame.  Update the number of scan lines to process
+    // based on the performance in the previous frame.  Less scan lines if the
+    // number of updates per second is too small, larger slower updates if they
+    // are too fast.
 
-    try
-    {
-      // Get the current screen size etc, if it has changed then inform the
-      // server about the change.
+    NumberOfUpdates = (Height + m_BackgroundNumberOfScanLinesPerUpdate - 1) /
+      m_BackgroundNumberOfScanLinesPerUpdate; // Will be at least 1.
+    ElapsedTime = system_time () - m_BackgroundUpdateStartTime;
+    if (ElapsedTime <= 0)
+      ElapsedTime = 1;
+    UpdatesPerSecond = NumberOfUpdates / (ElapsedTime / 1000000.0F);
+    OldUpdateSize = m_BackgroundNumberOfScanLinesPerUpdate;
+    if (UpdatesPerSecond < 20)
+      m_BackgroundNumberOfScanLinesPerUpdate--;
+    else if (UpdatesPerSecond > 25)
+      m_BackgroundNumberOfScanLinesPerUpdate++;
 
-      OldScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-      m_FrameBufferBeOSPntr->UpdatePixelFormatEtc ();
-      NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-      if (!NewScreenFormat.equal(OldScreenFormat))
-        m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
+    if (m_BackgroundNumberOfScanLinesPerUpdate <= 0)
+      m_BackgroundNumberOfScanLinesPerUpdate = 1;
+    else if (m_BackgroundNumberOfScanLinesPerUpdate > Height)
+      m_BackgroundNumberOfScanLinesPerUpdate = Height;
 
-      // Tell the server to resend the changed areas, by telling it to examine
-      // everything except the corner of the screen with the changing number.
-
-      rfb::Rect RectangleChanged (0, 0,
-        m_FrameBufferBeOSPntr->width (), m_FrameBufferBeOSPntr->height ());
-      rfb::Region RegionChanged (RectangleChanged);
-      m_ServerPntr->add_changed (RegionChanged);
-      m_ServerPntr->tryUpdate ();
-    }
-    catch (...)
-    {
-      m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
-      throw;
-    }
-    m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
+    if (OldUpdateSize != m_BackgroundNumberOfScanLinesPerUpdate)
+      vlog.debug ("Background screen scan update size changed from %d to "
+      "%d pixel rows due to performance of %.4f updates per second in the "
+      "previous full screen frame.",
+      OldUpdateSize, m_BackgroundNumberOfScanLinesPerUpdate, UpdatesPerSecond);
 
     UpdateCounter++;
     sprintf (TempString, "Update #%d", UpdateCounter);
     m_FrameBufferBeOSPntr->SetDisplayMessage (TempString);
 
-    m_NextForcedUpdateTime = system_time () + 20000000;
+    m_BackgroundNextScanLineY = 0;
+    m_BackgroundUpdateStartTime = system_time ();
   }
+
+  // Mark the current work unit of scan lines as needing an update.
+  
+  RectangleToUpdate.setXYWH (0, m_BackgroundNextScanLineY,
+    Width, m_BackgroundNumberOfScanLinesPerUpdate);
+  if (RectangleToUpdate.br.y > Height)
+    RectangleToUpdate.br.y = Height;
+  rfb::Region RegionChanged (RectangleToUpdate);
+  m_ServerPntr->add_changed (RegionChanged);
+
+  // Do the actual update, including whatever other areas that have been marked
+  // as needing an update.
+
+  SendScreenUpdateData ();
+
+  m_BackgroundNextScanLineY += m_BackgroundNumberOfScanLinesPerUpdate;
 }
 
 
@@ -473,19 +504,6 @@ uint8 SDesktopBeOS::FindKeyCodeFromMap (
       return KeyCode;
   }
   return 0;
-}
-
-
-void SDesktopBeOS::forcedUpdateCheck ()
-{
-  if (system_time () > m_NextForcedUpdateTime)
-    DoScreenUpdate ();
-}
-
-
-void SDesktopBeOS::framebufferUpdateRequest ()
-{
-  m_NextForcedUpdateTime = system_time () + 1000000;
 }
 
 
@@ -523,11 +541,6 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   vlog.debug ("VNC keycode $%04X received, key is %s.",
     key, down ? "down" : "up");
-
-  // Hack - force a screen update a short time after a key is pressed, since it
-  // is likely that the screen will have changed a bit.
-
-  m_NextForcedUpdateTime = system_time () + 300000;
 
   NewKeyState = m_LastKeyState;
 
@@ -730,7 +743,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
 {
   if (m_InputDeviceMousePntr == NULL || m_FrameBufferBeOSPntr == NULL ||
-  m_FrameBufferBeOSPntr->width () <= 0)
+  m_ServerPntr == NULL || m_FrameBufferBeOSPntr->width () <= 0)
     return;
 
   float    AbsoluteY;
@@ -791,6 +804,19 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
     EventMessage.AddInt32 ("buttons", NewMouseButtons);
     m_InputDeviceMousePntr->Control ('ViNC', &EventMessage);
     EventMessage.MakeEmpty ();
+
+    // Also request a screen update later on for the area around the mouse 
+    // coordinates.  That way moving the mouse around will update the screen
+    // under the mouse pointer.  Same for clicking, since that often brings up
+    // menus which need to be made visible.
+
+    rfb::Rect ScreenRect;
+    ScreenRect.setXYWH (0, 0,
+      m_FrameBufferBeOSPntr->width (), m_FrameBufferBeOSPntr->height ());
+    rfb::Rect RectangleToUpdate;
+    RectangleToUpdate.setXYWH (pos.x - 32, pos.y - 32, 64, 64);
+    rfb::Region RegionChanged (RectangleToUpdate.intersect (ScreenRect));
+    m_ServerPntr->add_changed (RegionChanged);
   }
 
   // Check for a mouse wheel change (button 4 press+release is wheel up one
@@ -823,15 +849,45 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   if (EventMessage.what != 0)
     m_InputDeviceMousePntr->Control ('ViNC', &EventMessage);
 
-  // Hack - for some reason the client stops requesting frames and thinks it is
-  // up to date when the user clicks on something.  So force an update soon
-  // after a mouse click or move is made.
-
-  m_NextForcedUpdateTime = system_time () + 300000;
-
   m_LastMouseButtonState = buttonmask;
   m_LastMouseX = AbsoluteX;
   m_LastMouseY = AbsoluteY;
+}
+
+
+void SDesktopBeOS::SendScreenUpdateData ()
+{
+  rfb::PixelFormat NewScreenFormat;
+  rfb::PixelFormat OldScreenFormat;
+
+  if (m_FrameBufferBeOSPntr != NULL)
+  {
+    m_FrameBufferBeOSPntr->LockFrameBuffer ();
+
+    try
+    {
+      // Get the current screen size etc, if it has changed then inform the
+      // server about the change.
+
+      OldScreenFormat = m_FrameBufferBeOSPntr->getPF ();
+      m_FrameBufferBeOSPntr->UpdatePixelFormatEtc ();
+      NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
+      if (!NewScreenFormat.equal(OldScreenFormat))
+        m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
+
+      // Tell the server to resend the changed areas, causing it to read the
+      // screen memory in the areas marked as changed, compare it with the
+      // previous version, and send out any changes.
+
+      m_ServerPntr->tryUpdate ();
+    }
+    catch (...)
+    {
+      m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
+      throw;
+    }
+    m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
+  }
 }
 
 
