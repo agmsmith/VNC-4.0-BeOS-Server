@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonPPC/agmsmith/VNCServer-4.0-BeOS-AGMS-1.18/Source\040Code/beosserver/RCS/FrameBufferBeOS.cxx,v 1.15 2005/02/27 18:58:48 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.14 2005/02/27 20:20:16 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.14  2005/02/27 20:20:16  agmsmith
+ * Added a safer shutdown for the BDirectWindow window, crashed on PPC
+ * when an external thread tried to close it.  Also added big-endian
+ * video modes, though the bit order is likely wrong since VNC also
+ * compensates for big-endian machines itself.  The end result looks OK.
+ *
  * Revision 1.13  2005/02/12 19:47:24  agmsmith
  * Moved the two different colour palette structures into the
  * parent class and unified them.
@@ -83,6 +89,7 @@
 #include <Bitmap.h>
 #include <DirectWindow.h>
 #include <Locker.h>
+#include <Messenger.h>
 #include <Screen.h>
 #include <View.h>
 
