@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.5 2004/07/25 21:03:27 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.6 2004/08/02 15:54:24 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.6  2004/08/02 15:54:24  agmsmith
+ * Rearranged methods to be in alphabetical order, still under construction.
+ *
  * Revision 1.5  2004/07/25 21:03:27  agmsmith
  * Under construction, adding keymap and keycode simulation.
  *
@@ -53,6 +56,7 @@
 #include <rfb/SDesktop.h>
 
 #define XK_MISCELLANY 1
+#define XK_LATIN1 1
 #include <rfb/keysymdef.h>
 
 /* BeOS (Be Operating System) headers. */
@@ -75,6 +79,62 @@
 static rfb::LogWriter vlog("SDesktopBeOS");
 
 
+static char UTF8_Backspace [] = {B_BACKSPACE, 0};
+static char UTF8_Return [] = {B_RETURN, 0};
+static char UTF8_Tab [] = {B_TAB, 0};
+static char UTF8_Escape [] = {B_ESCAPE, 0};
+static char UTF8_LeftArrow [] = {B_LEFT_ARROW, 0};
+static char UTF8_RightArrow [] = {B_RIGHT_ARROW, 0};
+static char UTF8_UpArrow [] = {B_UP_ARROW, 0};
+static char UTF8_DownArrow [] = {B_DOWN_ARROW, 0};
+static char UTF8_Insert [] = {B_INSERT, 0};
+static char UTF8_Delete [] = {B_DELETE, 0};
+static char UTF8_Home [] = {B_HOME, 0};
+static char UTF8_End [] = {B_END, 0};
+static char UTF8_PageUp [] = {B_PAGE_UP, 0};
+static char UTF8_PageDown [] = {B_PAGE_DOWN, 0};
+
+
+// This table is used for converting VNC key codes into UTF-8 characters, but
+// only for the normal printable characters.  Function keys and modifier keys
+// (like shift) are handled separately.  Note that the table is in increasing
+// order of VNC key code, so that a binary search can be done.
+
+typedef struct VNCKeyToUTF8Struct
+{
+  uint16 vncKeyCode;
+  char  *utf8String;
+} VNCKeyToUTF8Record, *VNCKeyToUTF8Pointer;
+
+extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
+{
+  int Result;
+
+  Result = ((VNCKeyToUTF8Pointer) APntr)->vncKeyCode;
+  Result -= ((VNCKeyToUTF8Pointer) BPntr)->vncKeyCode;;
+  return Result;
+}
+
+static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
+{
+  {/* 0x0020 */ XK_space, " "},
+  {/* 0xFF08 */ XK_BackSpace, UTF8_Backspace},
+  {/* 0xFF09 */ XK_Tab, UTF8_Tab},
+  {/* 0xFF0D */ XK_Return, UTF8_Return},
+  {/* 0xFF1B */ XK_Escape, UTF8_Escape},
+  {/* 0xFF50 */ XK_Home, UTF8_Home},
+  {/* 0xFF51 */ XK_Left, UTF8_LeftArrow},
+  {/* 0xFF52 */ XK_Up, UTF8_UpArrow},
+  {/* 0xFF53 */ XK_Right, UTF8_RightArrow},
+  {/* 0xFF54 */ XK_Down, UTF8_DownArrow},
+  {/* 0xFF55 */ XK_Page_Up, UTF8_PageUp},
+  {/* 0xFF56 */ XK_Page_Down, UTF8_PageDown},
+  {/* 0xFF57 */ XK_End, UTF8_End},
+  {/* 0xFF63 */ XK_Insert, UTF8_Insert},
+  {/* 0xFFFF */ XK_Delete, UTF8_Delete},
+};
+
+
 
 /******************************************************************************
  * Utility functions.
@@ -83,7 +143,7 @@ static rfb::LogWriter vlog("SDesktopBeOS");
 static inline void SetKeyState (
   key_info &KeyState,
   uint8 KeyCode,
-  uint32 KeyIsDown)
+  bool KeyIsDown)
 {
   uint8 BitMask;
   uint8 Index;
@@ -97,14 +157,6 @@ static inline void SetKeyState (
     KeyState.key_states[Index] |= BitMask;
   else
     KeyState.key_states[Index] &= ~BitMask;
-}
-
-
-void SendUnmappedKeys (key_info &OldKeyState, key_info &NewKeyState)
-{
-    // Sends B_UNMAPPED_KEY_UP or B_UNMAPPED_KEY_DOWN messages for all keys
-    // that have changed between the old and new states.
-bleeble;
 }
 
 
@@ -219,9 +271,13 @@ rfb::Point SDesktopBeOS::getFbSize ()
 
 void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 {
-  uint32   ChangedModifiers; // B_SHIFT_KEY, B_COMMAND_KEY, B_LEFT_SHIFT_KEY...
-  BMessage EventMessage;
-  key_info NewKeyState;
+  uint32              ChangedModifiers;
+  BMessage            EventMessage;
+  uint8               KeyCode;
+  char                KeyAsString [16];
+  VNCKeyToUTF8Record  KeyToUTF8SearchData;
+  VNCKeyToUTF8Pointer KeyToUTF8Pntr;
+  key_info            NewKeyState;
 
   printf ("SDesktopBeOS::keyEvent  Key %X, down: %d\n", key, down);
 
@@ -261,59 +317,77 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
     UpdateDerivedModifiersAndPressedModifierKeys (NewKeyState);
 
-    SendUnmappedKeys (m_LastKeyState, NewKeyState);
-
     if (NewKeyState.modifiers != m_LastKeyState.modifiers)
     {
       // Send a B_MODIFIERS_CHANGED message to update the system with the new
-      // modifier key settings.
-      
-bleeble;      
-      B_MODIFIERS_CHANGED 
-Source: The system. 
-Target: The focus view's window. 
-Sent when the user presses or releases a modifier key. 
+      // modifier key settings.  Note that this gets sent before the unmapped
+      // key message.
 
-Field
-Type code
-Description
-"when"
-B_INT64_TYPE
-Event time, in microseconds since 01/01/70
-"modifiers"
-B_INT32_TYPE
-The current modifier keys. See <x>
-"be:old_modifiers"
-B_INT32_TYPE
-The previous modifier keys.
-"states"
-B_UINT8_TYPE
-T
-
-
-    BMessage: what = _MCH (0x5f4d4348, or 1598899016)
-    entry           when, type='LLNG', c=1, size= 8, data[0]: 0x1546cc47a (5711381626, '')
-    entry      modifiers, type='LONG', c=1, size= 4, data[0]: 0x20 (32, '')
-    entry be:old_modifiers, type='LONG', c=1, size= 4, data[0]: 0x422 (1058, '')
-    entry         states, type='UBYT', c=1, size=16,   
-        EventMessage.what = B_MODIFIERS_CHANGED;
-        EventMessage.AddInt64 ("when", system_time ());
-        EventMessage.AddInt32 ("modifiers", 0);
-        EventMessage.AddData ("states", B_UINT8_TYPE, KeyAsString, 16);
-      
+      EventMessage.what = B_MODIFIERS_CHANGED;
+      EventMessage.AddInt64 ("when", system_time ());
+      EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
+      EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
+      EventMessage.AddData ("states",
+        B_UINT8_TYPE, &NewKeyState.key_states, 16);
+      m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+      EventMessage.MakeEmpty ();
     }
-    
+
+    SendUnmappedKeys (m_LastKeyState, NewKeyState);
+    m_LastKeyState = NewKeyState;
+
     if (ChangedModifiers != B_SCROLL_LOCK)
       return; // No actual typeable key was pressed, nothing further to do.
   }
 
+  // Look for keys which don't have UTF-8 codes, like the function keys.  They
+  // also are a direct press; they don't try to fiddle with the shift keys.
 
-  // Type the selected key.
-  switch (key)
+  KeyCode = 0;
+  if (key >= XK_F1 && key <= XK_F12)
+    KeyCode = B_F1_KEY + key - XK_F1;
+  else if (key == XK_Scroll_Lock)
+    KeyCode = B_SCROLL_KEY;
+  else if (key == XK_Print)
+    KeyCode = B_PRINT_KEY;
+  else if (key == XK_Pause)
+    KeyCode = B_PAUSE_KEY;
+
+  if (KeyCode != 0)
   {
+    SetKeyState (m_LastKeyState, KeyCode, down);
+    
+    EventMessage.what = down ? B_KEY_DOWN : B_KEY_UP;
+    EventMessage.AddInt64 ("when", system_time ());
+    EventMessage.AddInt32 ("key", KeyCode);
+    EventMessage.AddInt32 ("modifiers", m_LastKeyState.modifiers);
+    KeyAsString [0] = B_FUNCTION_KEY;
+    KeyAsString [1] = 0;
+    EventMessage.AddInt8 ("byte", KeyAsString [0]);
+    EventMessage.AddString ("bytes", KeyAsString);
+    EventMessage.AddData ("states", B_UINT8_TYPE,
+      m_LastKeyState.key_states, 16);
+    EventMessage.AddInt32 ("raw_char", KeyAsString [0]);
+    m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+    EventMessage.MakeEmpty ();
+    return;
   }
-  // Tell the system to use the new modifier settings.
-  // Tell the system to type the keys for the letter, if any.
+
+  // The rest of the keys have an equivalent UTF-8 character.  Convert the key
+  // code into a UTF-8 character, which will later be used to determine which
+  // keys to press.
+
+  KeyToUTF8SearchData.vncKeyCode = key;
+  KeyToUTF8Pntr = bsearch (
+    (const void *) &KeyToUTF8SearchData,
+    (const void *) VNCKeyToUTF8Array,
+    sizeof (VNCKeyToUTF8Record),
+    sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
+    CompareVNCKeyRecords);
+  if (KeyToUTF8Pntr == NULL)
+    return; // Key not handled, ignore it.
+
+  bleeble;
 }
 
 
@@ -423,6 +497,45 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   m_LastMouseX = AbsoluteX;
   m_LastMouseY = AbsoluteY;
 }
+
+
+void SDesktopBeOS::SendUnmappedKeys (
+  key_info &OldKeyState,
+  key_info &NewKeyState)
+{
+  int      BitIndex;
+  int      ByteIndex;
+  uint8    DeltaBit;
+  BMessage EventMessage;
+  int      KeyCode;
+  uint8    Mask;
+  uint8    NewBits;
+  uint8    OldBits;
+  
+  KeyCode = 0;
+  for (ByteIndex = 0; ByteIndex < 7; ByteIndex++)
+  {
+    OldBits = OldKeyState.key_states[ByteIndex];
+    NewBits = NewKeyState.key_states[ByteIndex];
+    for (BitIndex = 7; BitIndex >= 0; BitIndex--, KeyCode++)
+    {
+      Mask = 1 << BitIndex;
+      DeltaBit = (OldBits ^ NewBits) & Mask;
+      if (DeltaBit == 0)
+        continue; // Key hasn't changed.
+      EventMessage.what =
+        (NewBits & Mask) ? B_UNMAPPED_KEY_DOWN : B_UNMAPPED_KEY_UP;
+      EventMessage.AddInt64 ("when", system_time ());
+      EventMessage.AddInt32 ("key", KeyCode);
+      EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
+      EventMessage.AddData ("states",
+        B_UINT8_TYPE, &NewKeyState.key_states, 16);
+      m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+      EventMessage.MakeEmpty ();
+    }
+  }
+}
+
 
 
 void SDesktopBeOS::setServer (rfb::VNCServer *ServerPntr)
