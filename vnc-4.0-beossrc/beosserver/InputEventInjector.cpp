@@ -1,14 +1,19 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.2 2004/06/27 20:31:44 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/VNCAppServerInterface.cpp,v 1.1 2004/07/04 20:25:28 agmsmith Exp agmsmith $
  *
  * This is the add-in (shared .so library for BeOS) which injects keyboard and
  * mouse events into the BeOS InputServer, letting the remote system move the
  * mouse and simulate keyboard button presses.
  *
+ * Put the shared library file created by this project (its default name is
+ * "VNCAppServerInterface") into /boot/home/config/add-ons/input_server/devices
+ * to install it.
+ *
  * It registers itself as a keyboard device and a mouse device with the
  * InputServer.  It also receives messages from other programs using the
  * BInputDevice Control system, and then copies and forwards those messages to
- * the InputServer.
+ * the InputServer.  So it could be used by other programs than VNC, if
+ * desired.
  *
  * Copyright (C) 2004 by Alexander G. M. Smith.  All Rights Reserved.
  *
@@ -26,7 +31,9 @@
  * this software; if not, write to the Free Software Foundation, Inc., 59
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Log: SDesktopBeOS.cxx,v $
+ * $Log: VNCAppServerInterface.cpp,v $
+ * Revision 1.1  2004/07/04 20:25:28  agmsmith
+ * Initial revision
  */
 
 /* BeOS (Be Operating System) headers. */
@@ -45,6 +52,7 @@
 
 extern "C" _EXPORT BInputServerDevice* instantiate_input_device (void);
 
+const char VNCAppServerInterfaceVersionString [] = "$Header: $";
 
 static struct input_device_ref FakeKeyboardLink =
 {
