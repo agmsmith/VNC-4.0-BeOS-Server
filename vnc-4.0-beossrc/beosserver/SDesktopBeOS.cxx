@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.23 2005/02/06 22:03:10 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.24 2005/02/13 01:42:05 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.24  2005/02/13 01:42:05  agmsmith
+ * Can now receive clipboard text from the remote clients and
+ * put it on the BeOS clipboard.
+ *
  * Revision 1.23  2005/02/06 22:03:10  agmsmith
  * Changed to use the new BScreen reading method if the
  * BDirectWindow one doesn't work.  Also removed the screen
@@ -151,6 +155,36 @@
  */
 
 static rfb::LogWriter vlog("SDesktopBeOS");
+
+static rfb::BoolParameter TryBDirectWindow ("ScreenReaderBDirect",
+  "Set to TRUE if you want to include the BDirectWindow screen reader "
+  "technique in the set of techniques the program attempts to use.  "
+  "This one is the recommended one for faster responses since "
+  "it maps the video memory into main memory, rather than requiring a "
+  "copy operation to read it.  Thus waving the mouse pointer will be able "
+  "to update the screen under the mouse with the contents at that instant.  "
+  "However, only well supported video boards can use this and ones that "
+  "aren't supported will just fail the startup test and not use this "
+  "technique even if you ask for it.",
+  1);
+
+static rfb::BoolParameter TryBScreen ("ScreenReaderBScreen",
+  "Set to TRUE if you want to include the BScreen based screen reader "
+  "technique in the set of techniques the program attempts to use.  "
+  "This one is compatible with all video boards, but much slower since "
+  "it copies the whole screen to a bitmap before starting to work.  This "
+  "also makes small updates useless - waving the mouse pointer won't "
+  "reveal anything new until the next full screen update.  One advantage "
+  "is that if you boot up without a good video driver, it does show the "
+  "mouse cursor, since the cursor is actually drawn into the frame buffer "
+  "by BeOS rather than using a hardware sprite.",
+  1);
+
+static rfb::BoolParameter ShowCheapCursor ("ShowCheapCursor",
+  "If you want to see a marker on the screen where the mouse may be, turn on "
+  "this parameter.  It will draw a cross shape into the data being sent out.  "
+  "It's better if you instead use a client which draws the cursor.",
+  0);
 
 
 static char UTF8_Backspace [] = {B_BACKSPACE, 0};
@@ -505,6 +539,8 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
     {
       // This will trigger a full screen update too, which takes a while.
       m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
+      if (ShowCheapCursor)
+        MakeCheapCursor ();
     }
     else // No screen change, try an update.
     {
@@ -894,6 +930,48 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 }
 
 
+void SDesktopBeOS::MakeCheapCursor (void)
+{
+  if (m_FrameBufferBeOSPntr == NULL || m_ServerPntr == NULL)
+    return;
+
+  static unsigned char CrossMask [7 /* Our cursor is 7 rows tall */] =
+  { // A one bit per pixel transparency mask, high bit first in each byte.
+    0x10, // 00010000
+    0x10, // 00010000
+    0x10, // 00010000
+    0xEE, // 11101110
+    0x10, // 00010000
+    0x10, // 00010000
+    0x10, // 00010000
+  };
+
+  rfb::Pixel         Black;
+  rfb::Pixel         White;
+  rfb::Rect          Rectangle;
+  rfb::ManagedPixelBuffer CursorBitmap (m_FrameBufferBeOSPntr->getPF (), 7, 7);
+
+  Black = m_FrameBufferBeOSPntr->getPF().pixelFromRGB (
+    (rdr::U16) 0, (rdr::U16) 0, (rdr::U16) 0,
+    m_FrameBufferBeOSPntr->getColourMap());
+  White = m_FrameBufferBeOSPntr->getPF().pixelFromRGB (
+    (rdr::U16) 0xFFFF, (rdr::U16) 0xFFFF, (rdr::U16) 0xFFFF,
+    m_FrameBufferBeOSPntr->getColourMap());
+
+  // Draw a cross.
+  Rectangle.setXYWH (0, 0, 7, 7);
+  CursorBitmap.fillRect (Rectangle, White);
+  Rectangle.setXYWH (3, 0, 1, 7);
+  CursorBitmap.fillRect (Rectangle, Black);
+  Rectangle.setXYWH (0, 3, 7, 1);
+  CursorBitmap.fillRect (Rectangle, Black);
+
+  // Tell the server to use it.
+  m_ServerPntr->setCursor (/* x, y, hotx, hoty */ 7, 7, 3, 3,
+    CursorBitmap.data, CrossMask);
+}
+
+
 void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
 {
   if (m_EventInjectorPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
@@ -978,6 +1056,9 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
     // coordinates.  That way moving the mouse around will update the screen
     // under the mouse pointer.  Same for clicking, since that often brings up
     // menus which need to be made visible.
+
+    if (ShowCheapCursor)
+      m_ServerPntr->setCursorPos (pos.x, pos.y);
 
     rfb::Rect ScreenRect;
     ScreenRect.setXYWH (0, 0,
@@ -1077,7 +1158,7 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
   // Try various different techniques for reading the screen, their
   // constructors will fail if they aren't supported.
 
-  if (m_FrameBufferBeOSPntr == NULL)
+  if (m_FrameBufferBeOSPntr == NULL && TryBDirectWindow)
   {
     try
     {
@@ -1090,7 +1171,7 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
     }
   }
 
-  if (m_FrameBufferBeOSPntr == NULL)
+  if (m_FrameBufferBeOSPntr == NULL && TryBScreen)
   {
     try
     {
@@ -1105,10 +1186,14 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
 
   if (m_FrameBufferBeOSPntr == NULL)
     throw rdr::Exception ("Unable to find any screen reading techniques "
-    "which are compatible with your video card.  Try a different video card?",
+    "which are compatible with your video card.  Only tried the ones not "
+    "turned off on the command line.  Perhaps try a different video card?",
     "SDesktopBeOS::start");
 
   m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
+
+  if (ShowCheapCursor)
+    MakeCheapCursor ();
 
   if (m_EventInjectorPntr == NULL)
     m_EventInjectorPntr =
