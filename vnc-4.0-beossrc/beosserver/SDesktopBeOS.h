@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.8 2004/11/27 22:53:59 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.9 2004/12/13 03:57:37 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.9  2004/12/13 03:57:37  agmsmith
+ * Combined functions for doing background update with grabbing the
+ * screen memory.  Also limit update size to at least 4 scan lines.
+ *
  * Revision 1.8  2004/11/27 22:53:59  agmsmith
  * Changed update technique to scan a small part of the screen each time
  * so that big updates don't slow down the interactivity by being big.
@@ -73,10 +77,10 @@ public:
 
   void BackgroundScreenUpdateCheck ();
     // Checks for changes in a portion of the screen.  This gets called
-    // periodically by the server, at most 100 times per second.  It sends the
+    // periodically by the server, around 100 times per second.  It sends the
     // data for the changed part of the screen and also checks for a resolution
     // change.  It has a dynamic algorithm which tries to make the updates
-    // small enough so that around 50 updates get done per second, including
+    // small enough so that around 25 updates get done per second, including
     // network transmission time.
 
   uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
@@ -139,6 +143,11 @@ protected:
     // Used at the end of the full screen to evaluate performance and help
     // adjust m_BackgroundNumberOfScanLinesPerUpdate.
 
+  bigtime_t m_DoubleClickTimeLimit;
+    // The time in microseconds when a second mouse click counts as a double
+    // click rather than a single click.  Grabbed from the OS preferences when
+    // the desktop starts up.
+
   class FrameBufferBeOS *m_FrameBufferBeOSPntr;
     // Our FrameBufferBeOS instance and the associated BDirectWindowReader
     // (which may or may not exist) which is used for accessing the frame
@@ -170,6 +179,15 @@ protected:
   rdr::U8 m_LastMouseButtonState;
     // The mouse buttons from the last remote mouse update.  Needed since
     // we have to convert the mouse events into up, down and moved events.
+
+  unsigned int m_LastMouseDownCount;
+  bigtime_t m_LastMouseDownTime;
+  	// These two member variables help detect double clicks.  The time stamp is
+  	// the time when the mouse was previously clicked down.  If the next click
+  	// comes within the user's prefered mouse double click time then we count
+  	// it as a double click, and increment m_LastMouseDownCount, which gets
+  	// included in the mouse down message (but not the up one).  Otherwise it
+  	// is a single click and m_LastMouseDownCount gets reset to 1.
 
   float m_LastMouseX;
   float m_LastMouseY;

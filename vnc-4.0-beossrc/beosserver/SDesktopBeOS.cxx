@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.17 2005/01/01 20:34:34 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.18 2005/01/01 20:46:47 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.18  2005/01/01 20:46:47  agmsmith
+ * Make the default control/alt key swap detection be the alt is alt
+ * and control is control setting, in case the keyboard isn't a
+ * standard USA keyboard layout.
+ *
  * Revision 1.17  2005/01/01 20:34:34  agmsmith
  * Swap control and alt keys if the user's keymap has them swapped.
  * Since it uses a physical key code (92) to detect the left control
@@ -402,16 +407,20 @@ SDesktopBeOS::SDesktopBeOS () :
   m_BackgroundNextScanLineY (-1),
   m_BackgroundNumberOfScanLinesPerUpdate (32),
   m_BackgroundUpdateStartTime (0),
+  m_DoubleClickTimeLimit (500000),
   m_FrameBufferBeOSPntr (NULL),
   m_InputDeviceKeyboardPntr (NULL),
   m_InputDeviceMousePntr (NULL),
   m_KeyCharStrings (NULL),
   m_KeyMapPntr (NULL),
   m_LastMouseButtonState (0),
+  m_LastMouseDownCount (1),
+  m_LastMouseDownTime (0),
   m_LastMouseX (-1.0F),
   m_LastMouseY (-1.0F),
   m_ServerPntr (NULL)
 {
+  get_click_speed (&m_DoubleClickTimeLimit);
   memset (&m_LastKeyState, 0, sizeof (m_LastKeyState));
 }
 
@@ -825,11 +834,13 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   m_ServerPntr == NULL || m_FrameBufferBeOSPntr->width () <= 0)
     return;
 
-  float    AbsoluteY;
-  float    AbsoluteX;
-  BMessage EventMessage;
-  rdr::U8  NewMouseButtons;
-  rdr::U8  OldMouseButtons;
+  float     AbsoluteY;
+  float     AbsoluteX;
+  bigtime_t CurrentTime;
+  bigtime_t ElapsedTime;
+  BMessage  EventMessage;
+  rdr::U8   NewMouseButtons;
+  rdr::U8   OldMouseButtons;
 
   // Swap buttons 2 and 3, since BeOS uses left, middle, right and the rest of
   // the world has left, right, middle.  Or vice versa?
@@ -870,17 +881,30 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   // sending messages which do nothing (can happen when the mouse wheel is
   // used).  We just need to provide absolute position "x" and "y", which the
   // system will convert to a "where" BPoint, "buttons" for the current button
-  // state and the "when" time field.  The system will add "modifiers",
-  // "be:transit" and "be:view_where".
+  // state and the "when" time field.  We also have to fake the "clicks" field
+  // with the current double click count, but only for mouse down messages.
+  // The system will add "modifiers", "be:transit" and "be:view_where".
 
   if (EventMessage.what != B_MOUSE_MOVED ||
   m_LastMouseX != AbsoluteX || m_LastMouseY != AbsoluteY ||
   NewMouseButtons != OldMouseButtons)
   {
+    CurrentTime = system_time ();
     EventMessage.AddFloat ("x", AbsoluteX);
     EventMessage.AddFloat ("y", AbsoluteY);
-    EventMessage.AddInt64 ("when", system_time ());
+    EventMessage.AddInt64 ("when", CurrentTime);
     EventMessage.AddInt32 ("buttons", NewMouseButtons);
+    if (EventMessage.what == B_MOUSE_DOWN)
+    {
+      ElapsedTime = CurrentTime - m_LastMouseDownTime;
+      if (ElapsedTime <= m_DoubleClickTimeLimit)
+        m_LastMouseDownCount++;
+      else // Counts as a new single click.
+        m_LastMouseDownCount = 1;
+      EventMessage.AddInt32 ("clicks", m_LastMouseDownCount);
+      m_LastMouseDownTime = CurrentTime;
+    }
+
     m_InputDeviceMousePntr->Control ('ViNC', &EventMessage);
     EventMessage.MakeEmpty ();
 
