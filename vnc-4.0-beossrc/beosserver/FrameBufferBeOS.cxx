@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.8 2005/02/06 21:31:13 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.9 2005/02/06 23:24:33 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.9  2005/02/06 23:24:33  agmsmith
+ * Added a generic status window feature so that even the
+ * BScreen approach gets a status window.
+ *
  * Revision 1.8  2005/02/06 21:31:13  agmsmith
  * Split frame buffer class into two parts, one for the old BDirectWindow
  * screen reading technique, and another for the new BScreen method.
@@ -609,6 +613,8 @@ FrameBufferBScreen::FrameBufferBScreen ()
 : m_BScreenPntr (NULL),
   m_ScreenCopyPntr (NULL)
 {
+  vlog.debug ("Constructing a FrameBufferBScreen object.");
+
   m_BScreenPntr = new BScreen (B_MAIN_SCREEN_ID);
   if (!m_BScreenPntr->IsValid ())
     throw rdr::Exception ("Creation of a new BScreen object has failed",
