@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.12 2004/12/05 23:40:04 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.13 2004/12/12 21:44:39 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.13  2004/12/12 21:44:39  agmsmith
+ * Remove dead event loop timer, it does get stuck for long times
+ * when the network connection is down.
+ *
  * Revision 1.12  2004/12/05 23:40:04  agmsmith
  * Change timing system to use the event loop rather than a
  * separate thread.  Didn't fix the memory crash bug when
@@ -111,7 +115,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.12 2004/12/05 23:40:04 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.13 2004/12/12 21:44:39 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -401,6 +405,6 @@ int main (int argc, char** argv)
     vlog.error(e.str());
     ReturnCode = -1;
   }
-
+ 
   return ReturnCode;
 }
