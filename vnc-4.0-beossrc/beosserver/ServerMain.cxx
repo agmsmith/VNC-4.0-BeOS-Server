@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.16 2005/02/06 23:39:14 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.17 2005/02/13 01:28:44 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.17  2005/02/13 01:28:44  agmsmith
+ * Now notices clipboard changes and informs all the clients
+ * about the new text contents.
+ *
  * Revision 1.16  2005/02/06 23:39:14  agmsmith
  * Bumpped version number.
  *
@@ -126,24 +130,19 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.16 2005/02/06 23:39:14 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.17 2005/02/13 01:28:44 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
-
-static rfb::IntParameter http_port("HTTPPortNumber",
-  "TCP/IP port on which the server will serve the Java applet VNC Viewer ",
-  5800);
 
 static rfb::IntParameter port_number("PortNumber",
   "TCP/IP port on which the server will accept connections",
   5900);
 
-static rfb::StringParameter hosts("Hosts",
-  "Filter describing which hosts are allowed access to this server",
-  "+");
-
 static rfb::VncAuthPasswdFileParameter vncAuthPasswd;
+  // Creating this object is enough to register it with the
+  // SSecurityFactoryStandard class system, specifying that we
+  // store passwords in a file.
 
 
 
