@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.11 2005/02/06 23:37:13 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.12 2005/02/08 00:33:11 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.12  2005/02/08 00:33:11  agmsmith
+ * Bad destruction log message.
+ *
  * Revision 1.11  2005/02/06 23:37:13  agmsmith
  * Destruction log message added.
  *
@@ -178,7 +181,7 @@ void StatusDisplayBView::Draw (BRect UpdateRect)
 class BDirectWindowReader : public BDirectWindow
 {
 public:
-  BDirectWindowReader ();
+  BDirectWindowReader (color_map *ColourMapPntr);
   virtual ~BDirectWindowReader ();
 
   virtual void DirectConnected (direct_buffer_info *ConnectionInfoPntr);
@@ -197,8 +200,9 @@ public:
   virtual void ScreenChanged (BRect frame, color_space mode);
     // Informs the window about a screen resolution change.
 
-  ColourMapHolder m_ColourMap;
-    // The colour map for this window (and screen) when it is in palette mode.
+  color_map *m_ColourMapPntr;
+  	// Points to the colour map to be updated when the palette changes.  The
+  	// map is owned by the creator of the window, so don't deallocate it.
 
   bool m_Connected;
     // TRUE if we are connected to the video memory, FALSE if not.  TRUE means
@@ -232,15 +236,19 @@ public:
   BRect m_ScreenSize;
     // The size of the screen as a rectangle.  Updated when the resolution
     // changes.
+
+private:
+  BDirectWindowReader (); // Default constructor shouldn't be used so hide it.
 };
 
 
-BDirectWindowReader::BDirectWindowReader ()
+BDirectWindowReader::BDirectWindowReader (color_map *ColourMapPntr)
   : BDirectWindow (BRect (0, 0, 1, 1), "BDirectWindowReader",
     B_NO_BORDER_WINDOW_LOOK,
     B_FLOATING_ALL_WINDOW_FEEL,
     B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AVOID_FOCUS,
     B_ALL_WORKSPACES),
+  m_ColourMapPntr (ColourMapPntr),
   m_Connected (false),
   m_ConnectionVersion (0),
   m_DoNotConnect (true)
@@ -251,8 +259,7 @@ BDirectWindowReader::BDirectWindowReader ()
   MoveTo (m_ScreenSize.left, m_ScreenSize.top);
   ResizeTo (80, 20); // A small window so it doesn't obscure the desktop.
 
-  memcpy (&m_ColourMap.m_BeOSColourMap,
-    ScreenInfo.ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
+  memcpy (m_ColourMapPntr, ScreenInfo.ColorMap (), sizeof (*m_ColourMapPntr));
 
   m_DoNotConnect = false; // Now ready for active operation.
 }
@@ -317,8 +324,8 @@ void BDirectWindowReader::ScreenChanged (BRect frame, color_space mode)
   mode == B_COLOR_8_BIT)
   {
     BScreen  ScreenInfo (this /* Info for screen this window is on */);
-    memcpy (&m_ColourMap.m_BeOSColourMap,
-      ScreenInfo.ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
+    memcpy (m_ColourMapPntr, ScreenInfo.ColorMap (),
+      sizeof (*m_ColourMapPntr));
   }
 }
 
@@ -422,7 +429,8 @@ FrameBufferBDirect::FrameBufferBDirect ()
 
   if (BDirectWindow::SupportsWindowMode ())
   {
-    m_StatusWindowPntr = new BDirectWindowReader;
+    m_StatusWindowPntr =
+      new BDirectWindowReader (&m_ColourMap.m_BeOSColourMap);
     m_StatusWindowPntr->Show (); // Opens the window and starts its thread.
     snooze (50000 /* microseconds */);
     InitialiseStatusView ();
@@ -484,7 +492,7 @@ unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
     // Set up some initial default values.  The actual values will be put in
     // depending on the particular video mode.
 
-    colourmap = &BDirectWindowPntr->m_ColourMap;
+    colourmap = &m_ColourMap;
 
     format.bpp = DirectInfoPntr->bits_per_pixel;
     // Number of actual colour bits, excluding alpha and pad bits.

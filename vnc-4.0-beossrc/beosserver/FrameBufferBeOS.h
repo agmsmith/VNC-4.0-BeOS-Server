@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.6 2005/02/06 21:30:43 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.7 2005/02/06 23:24:33 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.7  2005/02/06 23:24:33  agmsmith
+ * Added a generic status window feature so that even the
+ * BScreen approach gets a status window.
+ *
  * Revision 1.6  2005/02/06 21:30:43  agmsmith
  * Split frame buffer class into two parts, one for the old BDirectWindow
  * screen reading technique, and another for the new BScreen method.
@@ -121,6 +125,10 @@ protected:
     // Number of pixels on a whole row.  Equals number of bytes per row
     // (including padding bytes) divided by the number of bytes per pixel.
 
+  ColourMapHolder m_ColourMap;
+    // A copy of the screen's colour map, made when the pixel format was last
+    // updated.
+
   char m_StatusString [20];
     // The currently displayed status message text.  The BView that draws the
     // status display reads the text out of this area of memory whenever it is
@@ -173,10 +181,6 @@ public:
 protected:
   BScreen *m_BScreenPntr;
     // The link back to the OS for the current screen settings.
-
-  ColourMapHolder m_ColourMap;
-    // A copy of the screen's colour map, made when the pixel format was last
-    // updated.
 
   BBitmap *m_ScreenCopyPntr;
     // A copy of the screen, reallocated whenever the screen size or depth
