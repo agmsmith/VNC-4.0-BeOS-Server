@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.5 2004/06/07 01:06:50 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.6 2004/06/27 20:31:44 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.6  2004/06/27 20:31:44  agmsmith
+ * Got it working, so you can now see the desktop in different
+ * video modes (except 8 bit).  Even lets you switch screens!
+ *
  * Revision 1.5  2004/06/07 01:06:50  agmsmith
  * Starting to get the SDesktop working with the frame buffer
  * and a BDirectWindow.
@@ -77,7 +81,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.5 2004/06/07 01:06:50 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.6 2004/06/27 20:31:44 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -190,7 +194,8 @@ void ServerApp::Pulse ()
 
   try
   {
-    fd_set rfds;
+    bigtime_t      ElapsedTime;
+    fd_set         rfds;
     struct timeval tv;
 
     tv.tv_sec = 0;
@@ -225,10 +230,12 @@ void ServerApp::Pulse ()
     // Do this only when we've been idle for a while (1/10 second), otherwise
     // the Pulse event queue will fill up with pending pulses.
 
-    if (system_time () - TimeOfLastUpdateCheck > 90000 /* microsecs */)
+    ElapsedTime = system_time () - TimeOfLastUpdateCheck;
+    if (ElapsedTime > 90000 /* microsecs */)
     {
       if (m_VNCServerPntr->clientsReadyForUpdate ())
       {
+        m_FakeDesktopPntr->forcedUpdateCheck ();
         m_VNCServerPntr->tryUpdate ();
         TimeOfLastUpdateCheck = system_time ();
       }
