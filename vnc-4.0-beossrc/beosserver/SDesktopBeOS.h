@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.3 2004/07/19 22:30:19 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.4 2004/07/25 21:02:48 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.4  2004/07/25 21:02:48  agmsmith
+ * Under construction - adding keycode simulation.
+ *
  * Revision 1.3  2004/07/19 22:30:19  agmsmith
  * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
  *
@@ -50,6 +53,26 @@ public:
   SDesktopBeOS ();
   virtual ~SDesktopBeOS ();
 
+  void forcedUpdateCheck ();
+    // Checks if it is time for a forced update, and does it if needed.  This
+    // gets called periodically by the server.
+
+  virtual void framebufferUpdateRequest ();
+    // framebufferUpdateRequest() is called to let the desktop know that at
+    // least one client has become ready for an update.  Desktops can check
+    // whether there are clients ready at any time by calling the VNCServer's
+    // clientsReadyForUpdate() method.
+
+  virtual rfb::Point getFbSize ();
+    // getFbSize() returns the current dimensions of the framebuffer.
+    // This can be called even while the SDesktop is not start()ed.
+
+  virtual void keyEvent (rdr::U32 key, bool down);
+    // The remote user has pressed a key.
+
+  virtual void pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask);
+    // The remote user has moved the mouse or clicked a button.
+
   void setServer (rfb::VNCServer *ServerPntr);
     // Specifies the VNC server to use.  This is the thing which will parse VNC
     // messages, handle network connections etc.
@@ -66,25 +89,9 @@ public:
     // authenticated clients, and therefore the desktop can cease any expensive
     // tasks.
 
-  virtual void framebufferUpdateRequest ();
-    // framebufferUpdateRequest() is called to let the desktop know that at
-    // least one client has become ready for an update.  Desktops can check
-    // whether there are clients ready at any time by calling the VNCServer's
-    // clientsReadyForUpdate() method.
-
-  void forcedUpdateCheck ();
-    // Checks if it is time for a forced update, and does it if needed.  This
-    // gets called periodically by the server.
-
-  virtual rfb::Point getFbSize ();
-    // getFbSize() returns the current dimensions of the framebuffer.
-    // This can be called even while the SDesktop is not start()ed.
-
-  virtual void pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask);
-    // The remote user has moved the mouse or clicked a button.
-
-  virtual void keyEvent (rdr::U32 key, bool down);
-    // The remote user has pressed a key.
+  void SendUnmappedKeys (key_info &OldKeyState, key_info &NewKeyState);
+    // Sends B_UNMAPPED_KEY_UP or B_UNMAPPED_KEY_DOWN messages for all keys
+    // that have changed between the old and new states.
 
   void UpdateDerivedModifiersAndPressedModifierKeys (key_info &KeyState);
     // Looks at the modifier flags for individual modifier keys (left and right
