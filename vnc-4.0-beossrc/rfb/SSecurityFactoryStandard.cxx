@@ -26,6 +26,11 @@
 #include <rfb/Exception.h>
 #include <rfb/SSecurityFactoryStandard.h>
 
+// BeOS include files.
+#include <Directory.h>
+#include <FindDirectory.h>
+#include <Path.h>
+
 using namespace rfb;
 
 static LogWriter vlog("SSecurityFactoryStandard");
@@ -73,8 +78,28 @@ char* VncAuthPasswdConfigParameter::getVncAuthPasswd() {
 }
 
 
+static const char * GetDefaultPasswordFilePath (void)
+{
+  static char DefaultPath [1024];
+  int         ErrorCode;
+  BPath       Path;
+
+  // BeOS Specific code for finding a standard directory for our settings.
+
+  strcpy (DefaultPath, "/boot/home/.vnc/passwd");
+  ErrorCode = find_directory (B_USER_SETTINGS_DIRECTORY, &Path);
+  if (ErrorCode != B_OK)
+    return DefaultPath;
+  Path.Append ("VNCServer/passwd");
+  if (strlen (Path.Path()) >= sizeof (DefaultPath))
+    return DefaultPath;
+  strcpy (DefaultPath, Path.Path());
+  return DefaultPath;
+}
+
+
 VncAuthPasswdFileParameter::VncAuthPasswdFileParameter()
-  : param("PasswordFile", "Password file for VNC authentication", "") {
+  : param("PasswordFile", "Password file for VNC authentication", GetDefaultPasswordFilePath()) {
 }
 
 char* VncAuthPasswdFileParameter::getVncAuthPasswd() {
