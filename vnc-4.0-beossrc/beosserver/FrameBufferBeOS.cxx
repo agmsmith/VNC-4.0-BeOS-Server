@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.3 2004/01/25 02:57:42 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.1 2004/02/08 19:44:17 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -21,7 +21,9 @@
  * this software; if not, write to the Free Software Foundation, Inc., 59
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Log: ServerMain.cxx,v $
+ * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.1  2004/02/08 19:44:17  agmsmith
+ * Initial revision
  */
 
 /* Posix headers. */
@@ -38,6 +40,8 @@
 
 #include <DirectWindow.h>
 #include <Locker.h>
+#include <Screen.h>
+#include <View.h>
 
 /* Our source code */
 
@@ -49,6 +53,42 @@
  */
 
 static rfb::LogWriter vlog("FrameBufferBeOS");
+
+
+
+/******************************************************************************
+ * This BView fills the invisible window covering the screen.  It serves mainly
+ * as a place to detect mouse clicks and movement.  Plus it doesn't have a draw
+ * function and the background colour is set to transparent, so you can see the
+ * desktop background behind it.
+ */
+
+class TransparentBView : public BView
+{
+public:
+  TransparentBView (BRect ViewSize);
+
+  virtual void AttachedToWindow (void);
+};
+
+
+TransparentBView::TransparentBView (BRect ViewSize)
+  : BView (ViewSize, "TransparentBView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW)
+{
+}
+
+
+void TransparentBView::AttachedToWindow (void)
+{
+  BRect  FrameRect;
+  
+  FrameRect = Frame ();
+  vlog.debug ("TransparentBView::AttachedToWindow  "
+    "Our frame is %f,%f,%f,%f.\n",
+    FrameRect.left, FrameRect.top, FrameRect.right, FrameRect.bottom);
+
+  SetViewColor (B_TRANSPARENT_COLOR);
+}
 
 
 
@@ -103,22 +143,26 @@ public:
 };
 
 
-
-/******************************************************************************
- * Implementation of the BDirectWindowReader class.  Constructor, destructor
- * and the rest of the member functions in mostly alphabetical order.
- */
-
 BDirectWindowReader::BDirectWindowReader ()
-  : BDirectWindow (BRect (0,0,0,0), "BDirectWindowReader",
+  : BDirectWindow (BRect (0, 0, 1, 1), "BDirectWindowReader",
     B_NO_BORDER_WINDOW_LOOK, B_FLOATING_ALL_WINDOW_FEEL,
-    B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE),
+    B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE, B_ALL_WORKSPACES),
   m_Connected (false),
   m_ConnectionVersion (0),
   m_DoNotConnect (true)
 {
+  BScreen  ScreenInfo (this /* Info for screen this window is on */);
+  BRect    ScreenRect;
+
   vlog.debug ("Creating a BDirectWindowReader at address $%08X.\n",
     (unsigned int) this);
+
+  ScreenRect = ScreenInfo.Frame ();
+  MoveTo (ScreenRect.left, ScreenRect.top);
+  ResizeTo (ScreenRect.Width(), ScreenRect.Height());
+
+  AddChild (new TransparentBView (Bounds ()));
+  m_DoNotConnect = false; // Now ready for active operation.
 }
 
 
@@ -129,7 +173,8 @@ BDirectWindowReader::~BDirectWindowReader ()
 
   m_DoNotConnect = true;
 
-  // Force the window to disconnect from video memory.
+  // Force the window to disconnect from video memory, which will result in a
+  // callback to our DirectConnected function.
   Hide ();
   Sync ();
 }
@@ -178,7 +223,6 @@ FrameBufferBeOS::FrameBufferBeOS ()
       "maybe your graphics card needs DMA support and a hardware cursor",
       "FrameBufferBeOS");
   }
-  m_ReaderWindowPntr = new BDirectWindowReader;
 }
 
 
@@ -188,6 +232,7 @@ FrameBufferBeOS::~FrameBufferBeOS ()
 
   if (m_ReaderWindowPntr != NULL)
   {
+    m_ReaderWindowPntr->Lock ();
     m_ReaderWindowPntr->Quit (); // Closing the window makes it self destruct.
     m_ReaderWindowPntr = NULL;
   }
@@ -196,4 +241,11 @@ FrameBufferBeOS::~FrameBufferBeOS ()
 
 void FrameBufferBeOS::grabRect (const rfb::Rect &rect)
 {
+  if (m_ReaderWindowPntr == NULL)
+  {
+    vlog.debug ("FrameBufferBeOS::grabRect called for the first time, "
+      "initialising frame buffer access.\n");
+    m_ReaderWindowPntr = new BDirectWindowReader;
+    m_ReaderWindowPntr->Show (); // Opens the window and starts its thread.
+  }
 }

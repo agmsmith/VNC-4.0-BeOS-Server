@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.3 2004/01/25 02:57:42 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.1 2004/02/08 19:44:17 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -21,7 +21,9 @@
  * this software; if not, write to the Free Software Foundation, Inc., 59
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Log: ServerMain.cxx,v $
+ * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.1  2004/02/08 19:44:17  agmsmith
+ * Initial revision
  */
 
 
