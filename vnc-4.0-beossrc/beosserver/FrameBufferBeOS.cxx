@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.10 2005/02/06 23:32:14 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.11 2005/02/06 23:37:13 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.11  2005/02/06 23:37:13  agmsmith
+ * Destruction log message added.
+ *
  * Revision 1.10  2005/02/06 23:32:14  agmsmith
  * Add a log message for BScreen.
  *
@@ -644,7 +647,7 @@ FrameBufferBScreen::FrameBufferBScreen ()
 
 FrameBufferBScreen::~FrameBufferBScreen ()
 {
-  vlog.debug ("Destroying a FrameBufferBDirect object.");
+  vlog.debug ("Destroying a FrameBufferBScreen object.");
 
   delete m_ScreenCopyPntr;
   delete m_BScreenPntr;
