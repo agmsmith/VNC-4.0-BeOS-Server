@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.1 2004/06/07 01:07:28 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.2 2004/07/05 00:53:32 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.2  2004/07/05 00:53:32  agmsmith
+ * Added mouse event handling - break down the network mouse event into
+ * individual BMessages for the different mouse things, including the
+ * mouse wheel.  Also add a forced refresh once in a while.
+ *
  * Revision 1.1  2004/06/07 01:07:28  agmsmith
  * Initial revision
  */
@@ -46,7 +51,7 @@ public:
     // Specifies the VNC server to use.  This is the thing which will parse VNC
     // messages, handle network connections etc.
 
-  virtual void start ();
+  virtual void start (rfb::VNCServer* vs);
     // start() is called by the server when the first client authenticates
     // successfully, and can be used to begin any expensive tasks which are not
     // needed when there are no clients.  A valid PixelBuffer must have been

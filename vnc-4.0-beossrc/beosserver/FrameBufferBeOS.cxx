@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.3 2004/06/07 01:06:50 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.4 2004/06/27 20:31:44 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.4  2004/06/27 20:31:44  agmsmith
+ * Got it working, so you can now see the desktop in different
+ * video modes (except 8 bit).  Even lets you switch screens!
+ *
  * Revision 1.3  2004/06/07 01:06:50  agmsmith
  * Starting to get the SDesktop working with the frame buffer
  * and a BDirectWindow.
@@ -40,7 +44,7 @@
 /* VNC library headers. */
 
 #include <rdr/Exception.h>
-#include <rfb/FrameBuffer.h>
+#include <rfb/PixelBuffer.h>
 #include <rfb/LogWriter.h>
 
 /* BeOS (Be Operating System) headers. */
@@ -385,20 +389,6 @@ FrameBufferBeOS::~FrameBufferBeOS ()
 int FrameBufferBeOS::getStride () const
 {
   return m_CachedStride;
-}
-
-
-void FrameBufferBeOS::grabRect (const rfb::Rect &rect)
-{
-  // Does nothing in BeOS, since the frame buffer is the screen and doesn't
-  // need grabbing.  Also, grabRegion is the normal function used, grabRect is
-  // only used by Windows (grabRegion iterates through all rectangles and calls
-  // grabRect for each one).
-}
-
-
-void FrameBufferBeOS::grabRegion (const rfb::Region &rgn)
-{
 }
 
 

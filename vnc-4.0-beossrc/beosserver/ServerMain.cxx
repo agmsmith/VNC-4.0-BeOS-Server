@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.6 2004/06/27 20:31:44 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.7 2004/07/05 00:53:07 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.7  2004/07/05 00:53:07  agmsmith
+ * Check for a forced update too.
+ *
  * Revision 1.6  2004/06/27 20:31:44  agmsmith
  * Got it working, so you can now see the desktop in different
  * video modes (except 8 bit).  Even lets you switch screens!
@@ -81,7 +84,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.6 2004/06/27 20:31:44 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.7 2004/07/05 00:53:07 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -224,7 +227,7 @@ void ServerApp::Pulse ()
       m_VNCServerPntr->addClient(sock);
     }
 
-    m_VNCServerPntr->checkIdleTimeouts();
+    m_VNCServerPntr->checkTimeouts();
 
     // Try copying data from the frame buffer to the clients, if any need it.
     // Do this only when we've been idle for a while (1/10 second), otherwise

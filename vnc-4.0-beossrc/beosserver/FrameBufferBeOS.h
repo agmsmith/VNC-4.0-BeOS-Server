@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.3 2004/06/07 01:06:50 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.4 2004/06/27 20:31:44 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.4  2004/06/27 20:31:44  agmsmith
+ * Got it working, so you can now see the desktop in different
+ * video modes (except 8 bit).  Even lets you switch screens!
+ *
  * Revision 1.3  2004/06/07 01:06:50  agmsmith
  * Starting to get the SDesktop working with the frame buffer
  * and a BDirectWindow.
@@ -38,15 +42,13 @@
  * This subclass of rfb:FrameBuffer lets us grab pixels from the screen.
  */
 
-class FrameBufferBeOS : public rfb::FrameBuffer
+class FrameBufferBeOS : public rfb::FullFramePixelBuffer
 {
 public:
   FrameBufferBeOS ();
   virtual ~FrameBufferBeOS ();
 
   virtual int getStride () const;
-  virtual void grabRect (const rfb::Rect &rect);
-  virtual void grabRegion (const rfb::Region &rgn);
 
   unsigned int LockFrameBuffer ();
   void UnlockFrameBuffer ();

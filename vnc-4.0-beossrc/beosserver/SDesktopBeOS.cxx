@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.2 2004/06/27 20:31:44 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.3 2004/07/05 00:53:32 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.3  2004/07/05 00:53:32  agmsmith
+ * Added mouse event handling - break down the network mouse event into
+ * individual BMessages for the different mouse things, including the
+ * mouse wheel.  Also add a forced refresh once in a while.
+ *
  * Revision 1.2  2004/06/27 20:31:44  agmsmith
  * Got it working, so you can now see the desktop in different
  * video modes (except 8 bit).  Even lets you switch screens!
@@ -37,7 +42,7 @@
 
 /* VNC library headers. */
 
-#include <rfb/FrameBuffer.h>
+#include <rfb/PixelBuffer.h>
 #include <rfb/LogWriter.h>
 #include <rfb/SDesktop.h>
 
@@ -92,7 +97,7 @@ void SDesktopBeOS::setServer (rfb::VNCServer *ServerPntr)
 }
 
 
-void SDesktopBeOS::start ()
+void SDesktopBeOS::start (rfb::VNCServer* vs)
 {
   vlog.debug ("start called.");
 
