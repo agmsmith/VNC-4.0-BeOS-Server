@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.2 2004/02/08 21:13:34 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.3 2004/06/07 01:06:50 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.3  2004/06/07 01:06:50  agmsmith
+ * Starting to get the SDesktop working with the frame buffer
+ * and a BDirectWindow.
+ *
  * Revision 1.2  2004/02/08 21:13:34  agmsmith
  * BDirectWindow stuff under construction.
  *
@@ -60,73 +64,198 @@ static rfb::LogWriter vlog("FrameBufferBeOS");
 
 
 /******************************************************************************
- * This BView fills the invisible window covering the screen.  It serves mainly
- * as a place to detect mouse clicks and movement.  Plus it doesn't have a draw
- * function and the background colour is set to transparent, so you can see the
- * desktop background behind it.
+ * This wraps the VNC colour map around the BeOS colour map.  It's a pretty
+ * passive class, so other people do things to it to change the values.
  */
 
-class TransparentBView : public BView
+class ColourMapHolder : public rfb::ColourMap
 {
 public:
-  TransparentBView (BRect ViewSize);
+  virtual void lookup (int index, int* r, int* g, int* b);
 
-  virtual void AttachedToWindow (void);
+  color_map m_BeOSColourMap;
+    // The actual BeOS colour map to use.  Copied from the current screen
+    // palette.
 };
 
 
-TransparentBView::TransparentBView (BRect ViewSize)
-  : BView (ViewSize, "TransparentBView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW)
+void ColourMapHolder::lookup (int index, int* r, int* g, int* b)
 {
-}
+  rgb_color IndexedColour;
 
-
-void TransparentBView::AttachedToWindow (void)
-{
-  BRect  FrameRect;
-  
-  FrameRect = Frame ();
-  vlog.debug ("TransparentBView::AttachedToWindow  "
-    "Our frame is %f,%f,%f,%f.\n",
-    FrameRect.left, FrameRect.top, FrameRect.right, FrameRect.bottom);
-
-  SetViewColor (B_TRANSPARENT_COLOR);
+  if (index >= 0 && index < 256)
+    IndexedColour = m_BeOSColourMap.color_list [index];
+  else
+  {
+    IndexedColour.red = IndexedColour.green = 128;
+    IndexedColour.blue = IndexedColour.alpha = 255;
+  }
+  *r = IndexedColour.red;
+  *g = IndexedColour.green;
+  *b = IndexedColour.blue;
 }
 
 
 
 /******************************************************************************
- * Our variation of a BDirectWindow.
+ * This BView draws the status text line and fills the window.
  */
+
+class StatusDisplayBView : public BView
+{
+public:
+  StatusDisplayBView (BRect ViewSize);
+
+  virtual void AttachedToWindow (void);
+  virtual void Draw (BRect UpdateRect);
+
+  char *m_StringPntr;
+};
+
+
+StatusDisplayBView::StatusDisplayBView (BRect ViewSize)
+  : BView (ViewSize, "StatusDisplayBView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW)
+{
+}
+
+
+void StatusDisplayBView::AttachedToWindow (void)
+{
+  SetViewColor (100, 100, 0);
+  SetHighColor (255, 255, 128);
+  SetLowColor (ViewColor ());
+}
+
+
+void StatusDisplayBView::Draw (BRect UpdateRect)
+{
+  font_height FontHeight;
+  BPoint      Location;
+  float       Width;
+
+  Location = Bounds().LeftTop ();
+  GetFontHeight (&FontHeight);
+  Location.y +=
+    (Bounds().Height() - FontHeight.ascent - FontHeight.descent) / 2 +
+    FontHeight.ascent;
+  Width = StringWidth (m_StringPntr);
+  Location.x += (Bounds().Width() - Width) / 2;
+  DrawString (m_StringPntr, Location);
+}
+
+
+
+/******************************************************************************
+ * This variation of BDirectWindow allows us to capture the pixels on the
+ * screen.  It works by appearing in the corner (I couldn't make it invisible
+ * and behind the desktop window).  Then rather than the conventional use of a
+ * BDirectWindow where the application writes to the frame buffer memory
+ * directly, we just read it directly.
+ */
+
+class BDirectWindowReader : public BDirectWindow
+{
+public:
+  BDirectWindowReader ();
+  virtual ~BDirectWindowReader ();
+
+  virtual void DirectConnected (direct_buffer_info *ConnectionInfoPntr);
+    // Callback called by the OS when the video resolution changes or the frame
+    // buffer setup is otherwise changed.
+
+  unsigned int LockSettings ();
+  void UnlockSettings ();
+    // Lock and unlock the access to the common bitmap information data,
+    // so that the OS can't change it while the bitmap is being read.
+    // Keep locked for at most 3 seconds, otherwise the OS will time out
+    // and render the bitmap pointer invalid.  Lock returns the serial number
+    // of the changes, so if the serial number is unchanged then the settings
+    // (width, height, bitmap pointer, screen depth) are unchanged too.
+
+  virtual void ScreenChanged (BRect frame, color_space mode);
+    // Informs the window about a screen resolution change.
+
+  void SetDisplayString (const char *NewString);
+    // Sets the one line of text that's displayed by the status window.
+
+  ColourMapHolder m_ColourMap;
+    // The colour map for this window (and screen) when it is in palette mode.
+
+  bool m_Connected;
+    // TRUE if we are connected to the video memory, FALSE if not.  TRUE means
+    // that video memory has been mapped into this process's address space and
+    // we have a valid pointer to the frame buffer.  Don't try reading from
+    // video memory if this is FALSE!
+
+  unsigned int m_ConnectionVersion;
+    // A counter that is bumped up by one every time the connection changes.
+    // Makes it easy to see if your cached connection info is still valid.
+
+  BLocker m_ConnectionLock;
+    // This mutual exclusion lock makes sure that the callbacks from the OS to
+    // notify the window about frame buffer changes (usually a screen
+    // resolution change and the resulting change in frame buffer address and
+    // size) are mutually exclusive from other window operations (like reading
+    // the frame buffer or destroying the window).  Maximum lock time is 3
+    // seconds, then the OS might kill the program for not responding.
+
+  volatile bool m_DoNotConnect;
+    // A flag that the destructor sets to tell the rest of the window code not
+    // to try reconnecting to the frame buffer.
+
+  direct_buffer_info m_SavedFrameBufferInfo;
+      // A copy of the frame buffer information (bitmap address, video mode,
+      // screen size) from the last direct connection callback by the OS.  Only
+      // valid if m_Connected is true.  You should also lock m_ConnectionLock
+      // while reading information from this structure, so it doesn't change
+      // unexpectedly.
+
+  BRect m_ScreenSize;
+    // The size of the screen as a rectangle.  Updated when the resolution
+    // changes.
+
+protected:
+  char m_DisplayString [1024];
+    // This string is displayed in the server status window.  Since we couldn't
+    // hide the window, or make it smaller than 10x10 pixels, we make it a
+    // feature.
+
+  BView *m_StatusDisplayView;
+    // Points to the status display view if it exists (which just draws the
+    // contents of m_DisplayString), NULL otherwise.
+};
+
 
 BDirectWindowReader::BDirectWindowReader ()
   : BDirectWindow (BRect (0, 0, 1, 1), "BDirectWindowReader",
-    B_NO_BORDER_WINDOW_LOOK, B_FLOATING_ALL_WINDOW_FEEL,
-    B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE, B_ALL_WORKSPACES),
+    B_NO_BORDER_WINDOW_LOOK,
+    B_FLOATING_ALL_WINDOW_FEEL,
+    B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AVOID_FOCUS,
+    B_ALL_WORKSPACES),
   m_Connected (false),
   m_ConnectionVersion (0),
-  m_DoNotConnect (true)
+  m_DoNotConnect (true),
+  m_StatusDisplayView (NULL)
 {
   BScreen  ScreenInfo (this /* Info for screen this window is on */);
-  BRect    ScreenRect;
 
-  vlog.debug ("Creating a BDirectWindowReader at address $%08X.\n",
-    (unsigned int) this);
+  m_ScreenSize = ScreenInfo.Frame ();
+  MoveTo (m_ScreenSize.left, m_ScreenSize.top);
+  ResizeTo (80, 20); // A small window so it doesn't obscure the desktop.
 
-  ScreenRect = ScreenInfo.Frame ();
-  MoveTo (ScreenRect.left, ScreenRect.top);
-  ResizeTo (ScreenRect.Width(), ScreenRect.Height());
+  memcpy (&m_ColourMap.m_BeOSColourMap,
+    ScreenInfo.ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
 
-  AddChild (new TransparentBView (Bounds ()));
+  strcpy (m_DisplayString, "VNC-BeOS");
+  m_StatusDisplayView = new StatusDisplayBView (Bounds ());
+  ((StatusDisplayBView *) m_StatusDisplayView)->m_StringPntr = m_DisplayString;
+  AddChild (m_StatusDisplayView);
   m_DoNotConnect = false; // Now ready for active operation.
 }
 
 
 BDirectWindowReader::~BDirectWindowReader ()
 {
-  vlog.debug ("Destroying a BDirectWindowReader at address $%08X.\n",
-    (unsigned int) this);
-
   m_DoNotConnect = true;
 
   // Force the window to disconnect from video memory, which will result in a
@@ -162,115 +291,50 @@ void BDirectWindowReader::DirectConnected (
 }
 
 
-unsigned int BDirectWindowReader::getPixelFormat (rfb::PixelFormat &pf)
+unsigned int BDirectWindowReader::LockSettings ()
 {
-  unsigned int EndianTest;
-  unsigned int ReturnValue;
+  m_ConnectionLock.Lock ();
+  return m_ConnectionVersion;
+}
+
+
+void BDirectWindowReader::ScreenChanged (BRect frame, color_space mode)
+{
+  BDirectWindow::ScreenChanged (frame, mode);
 
   m_ConnectionLock.Lock ();
-  if (!m_Connected)
-  {
-    // Oops, looks like there is no frame buffer set up.
-    m_ConnectionLock.Unlock ();
-    return 0;
-  }
-
-  // Set up some initial default values.  The actual values will be put in
-  // depending on the particular video mode.
-
-  pf.bpp = m_SavedFrameBufferInfo.bits_per_pixel;
-  // Number of actual colour bits, excluding alpha and pad bits.
-  pf.depth = m_SavedFrameBufferInfo.bits_per_pixel;
-  pf.trueColour = true; // It usually is a non-palette video mode.
-
-  EndianTest = 1;
-  pf.bigEndian = ((* (unsigned char *) &EndianTest) == 0);
-
-  pf.blueShift = 0;
-  pf.greenShift = 8;
-  pf.redShift = 16;
-  pf.redMax = pf.greenMax = pf.blueMax = 255;
-
-  // Now set it according to the actual screen format.
-
-  switch (m_SavedFrameBufferInfo.pixel_format)
-  {
-    case B_RGB32: // xRGB 8:8:8:8, stored as little endian uint32
-    case B_RGBA32: // ARGB 8:8:8:8, stored as little endian uint32
-      pf.bpp = 32;
-      pf.depth = 24;
-      pf.blueShift = 0;
-      pf.greenShift = 8;
-      pf.redShift = 16;
-      pf.redMax = pf.greenMax = pf.blueMax = 255;
-      break;
-
-    case B_RGB24:
-      pf.bpp = 24;
-      pf.depth = 24;
-      pf.blueShift = 0;
-      pf.greenShift = 8;
-      pf.redShift = 16;
-      pf.redMax = pf.greenMax = pf.blueMax = 255;
-      break;
-
-    case B_RGB16: // xRGB 5:6:5, stored as little endian uint16
-      pf.bpp = 16;
-      pf.depth = 16;
-      pf.blueShift = 0;
-      pf.greenShift = 5;
-      pf.redShift = 11;
-      pf.redMax = 31;
-      pf.greenMax = 63;
-      pf.blueMax = 31;
-      break;
-
-    case B_RGB15: // RGB 1:5:5:5, stored as little endian uint16
-    case B_RGBA15: // ARGB 1:5:5:5, stored as little endian uint16
-      pf.bpp = 16;
-      pf.depth = 15;
-      pf.blueShift = 0;
-      pf.greenShift = 5;
-      pf.redShift = 10;
-      pf.redMax = pf.greenMax = pf.blueMax = 31;
-      break;
-
-    case B_CMAP8: // 256-color index into the color table.
-    case B_GRAY8: // 256-color greyscale value.
-      pf.bpp = 8;
-      pf.depth = 8;
-      pf.blueShift = 0;
-      pf.greenShift = 2;
-      pf.redShift = 4;
-      pf.redMax = 3;
-      pf.greenMax = 3;
-      pf.blueMax = 3;
-      pf.trueColour = false;
-      break;
-      
-    case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
-    case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
-    case B_RGB24_BIG: // Currently unused
-    case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
-    case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
-    case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
-      vlog.error ("Unimplemented big endian video mode #%d in "
-      "BDirectWindowReader::getPixelFormat.\n",
-      (unsigned int) m_SavedFrameBufferInfo.pixel_format);
-      break;
-    
-    default:
-      vlog.error ("Unimplemented video mode #%d in "
-      "BDirectWindowReader::getPixelFormat.\n",
-      (unsigned int) m_SavedFrameBufferInfo.pixel_format);
-      break;
-  }
-
-  ReturnValue = m_ConnectionVersion;
-    // Grab a copy since it may change when the lock is unlocked.
-
+  m_ScreenSize = frame;
+  m_ConnectionVersion++;
   m_ConnectionLock.Unlock ();
-  return ReturnValue;
+
+  // Update the palette if it is relevant.
+
+  if (mode == B_CMAP8 || mode == B_GRAY8 || mode == B_GRAYSCALE_8_BIT ||
+  mode == B_COLOR_8_BIT)
+  {
+    BScreen  ScreenInfo (this /* Info for screen this window is on */);
+    memcpy (&m_ColourMap.m_BeOSColourMap,
+      ScreenInfo.ColorMap (), sizeof (m_ColourMap.m_BeOSColourMap));
+  }
+}
+
+
+void BDirectWindowReader::SetDisplayString (const char *NewString)
+{
+  if (NewString == NULL || NewString[0] == 0)
+    m_DisplayString [0] = 0;
+  else
+    strncpy (m_DisplayString, NewString, sizeof (m_DisplayString));
+  m_DisplayString [sizeof (m_DisplayString) - 1] = 0;
+
+  if (m_StatusDisplayView != NULL)
+    m_StatusDisplayView->Invalidate ();
+}
+
+
+void BDirectWindowReader::UnlockSettings ()
+{
+  m_ConnectionLock.Unlock ();
 }
 
 
@@ -285,20 +349,29 @@ FrameBufferBeOS::FrameBufferBeOS () :
   m_CachedPixelFormatVersion (0),
   m_CachedStride (0)
 {
-  vlog.debug ("Constructing a FrameBufferBeOS object.\n");
+  vlog.debug ("Constructing a FrameBufferBeOS object.");
 
-  if (!BDirectWindow::SupportsWindowMode ())
+  if (BDirectWindow::SupportsWindowMode ())
   {
+    m_ReaderWindowPntr = new BDirectWindowReader;
+    m_ReaderWindowPntr->Show (); // Opens the window and starts its thread.
+    snooze (50000 /* microseconds */);
+    m_ReaderWindowPntr->Sync (); // Wait for it to finish drawing etc.
+    snooze (50000 /* microseconds */);
+    LockFrameBuffer ();
+    UpdatePixelFormatEtc ();
+    UnlockFrameBuffer ();
+  }
+  else
     throw rdr::Exception ("Windowed mode not supported for BDirectWindow, "
       "maybe your graphics card needs DMA support and a hardware cursor",
       "FrameBufferBeOS");
-  }
 }
 
 
 FrameBufferBeOS::~FrameBufferBeOS ()
 {
-  vlog.debug ("Destroying a FrameBufferBeOS object.\n");
+  vlog.debug ("Destroying a FrameBufferBeOS object.");
 
   if (m_ReaderWindowPntr != NULL)
   {
@@ -321,45 +394,157 @@ void FrameBufferBeOS::grabRect (const rfb::Rect &rect)
   // need grabbing.  Also, grabRegion is the normal function used, grabRect is
   // only used by Windows (grabRegion iterates through all rectangles and calls
   // grabRect for each one).
-  UpdateToCurrentScreenBitmapSettings ();
 }
 
 
 void FrameBufferBeOS::grabRegion (const rfb::Region &rgn)
 {
-  UpdateToCurrentScreenBitmapSettings ();
 }
 
 
-void FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings ()
+unsigned int FrameBufferBeOS::LockFrameBuffer ()
+{
+  if (m_ReaderWindowPntr != NULL)
+    return m_ReaderWindowPntr->LockSettings ();
+  return 0;
+}
+
+
+void FrameBufferBeOS::UnlockFrameBuffer ()
+{
+  if (m_ReaderWindowPntr != NULL)
+    m_ReaderWindowPntr->UnlockSettings ();
+}
+
+
+void FrameBufferBeOS::SetDisplayMessage (const char *StringPntr)
+{
+  if (m_ReaderWindowPntr != NULL)
+  {
+    m_ReaderWindowPntr->Lock ();
+    m_ReaderWindowPntr->SetDisplayString (StringPntr);
+    m_ReaderWindowPntr->Unlock ();
+  }
+}
+
+
+unsigned int FrameBufferBeOS::UpdatePixelFormatEtc ()
 {
   direct_buffer_info *DirectInfoPntr;
+  unsigned int        EndianTest;
 
   if (m_ReaderWindowPntr == NULL)
   {
-    vlog.debug ("FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings "
-    "called for the first time, initialising frame buffer access.\n");
-    m_ReaderWindowPntr = new BDirectWindowReader;
-    m_ReaderWindowPntr->Show (); // Opens the window and starts its thread.
+    width_ = 0;
+    height_ = 0;
+    return m_CachedPixelFormatVersion;
   }
 
-  // We just have to make sure that the settings (width, height, bitmap data
-  // pointer, etc) are up to date, and hopefully not changing until the
-  // grabbing has been done.
-
-  if (m_CachedPixelFormatVersion !=
-  m_ReaderWindowPntr->m_ConnectionVersion)
+  if (m_CachedPixelFormatVersion != m_ReaderWindowPntr->m_ConnectionVersion)
   {
-    m_CachedPixelFormatVersion = m_ReaderWindowPntr->getPixelFormat (format);
+    m_CachedPixelFormatVersion = m_ReaderWindowPntr->m_ConnectionVersion;
     DirectInfoPntr = &m_ReaderWindowPntr->m_SavedFrameBufferInfo;
+
+    // Set up some initial default values.  The actual values will be put in
+    // depending on the particular video mode.
+
+    colourmap = &m_ReaderWindowPntr->m_ColourMap;
+
+    format.bpp = DirectInfoPntr->bits_per_pixel;
+    // Number of actual colour bits, excluding alpha and pad bits.
+    format.depth = DirectInfoPntr->bits_per_pixel;
+    format.trueColour = true; // It usually is a non-palette video mode.
+
+    EndianTest = 1;
+    format.bigEndian = ((* (unsigned char *) &EndianTest) == 0);
+
+    format.blueShift = 0;
+    format.greenShift = 8;
+    format.redShift = 16;
+    format.redMax = format.greenMax = format.blueMax = 255;
+
+    // Now set it according to the actual screen format.
+
+    switch (DirectInfoPntr->pixel_format)
+    {
+      case B_RGB32: // xRGB 8:8:8:8, stored as little endian uint32
+      case B_RGBA32: // ARGB 8:8:8:8, stored as little endian uint32
+        format.bpp = 32;
+        format.depth = 24;
+        format.blueShift = 0;
+        format.greenShift = 8;
+        format.redShift = 16;
+        format.redMax = format.greenMax = format.blueMax = 255;
+        break;
+
+      case B_RGB24:
+        format.bpp = 24;
+        format.depth = 24;
+        format.blueShift = 0;
+        format.greenShift = 8;
+        format.redShift = 16;
+        format.redMax = format.greenMax = format.blueMax = 255;
+        break;
+
+      case B_RGB16: // xRGB 5:6:5, stored as little endian uint16
+        format.bpp = 16;
+        format.depth = 16;
+        format.blueShift = 0;
+        format.greenShift = 5;
+        format.redShift = 11;
+        format.redMax = 31;
+        format.greenMax = 63;
+        format.blueMax = 31;
+        break;
+
+      case B_RGB15: // RGB 1:5:5:5, stored as little endian uint16
+      case B_RGBA15: // ARGB 1:5:5:5, stored as little endian uint16
+        format.bpp = 16;
+        format.depth = 15;
+        format.blueShift = 0;
+        format.greenShift = 5;
+        format.redShift = 10;
+        format.redMax = format.greenMax = format.blueMax = 31;
+        break;
+
+      case B_CMAP8: // 256-color index into the color table.
+      case B_GRAY8: // 256-color greyscale value.
+        format.bpp = 8;
+        format.depth = 8;
+        format.blueShift = 0;
+        format.greenShift = 0;
+        format.redShift = 0;
+        format.redMax = 255;
+        format.greenMax = 255;
+        format.blueMax = 255;
+        format.trueColour = false;
+        break;
+
+      case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
+      case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
+      case B_RGB24_BIG: // Currently unused
+      case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
+      case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
+      case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
+        vlog.error ("Unimplemented big endian video mode #%d in "
+        "UpdatePixelFormatEtc.",
+        (unsigned int) DirectInfoPntr->pixel_format);
+        break;
+
+      default:
+        vlog.error ("Unimplemented video mode #%d in UpdatePixelFormatEtc.",
+        (unsigned int) DirectInfoPntr->pixel_format);
+        break;
+    }
 
     // Also update the real data - the actual bits and buffer size.
 
     data = (rdr::U8 *) DirectInfoPntr->bits;
-    width_ = DirectInfoPntr->window_bounds.right -
-      DirectInfoPntr->window_bounds.left + 1;
-    height_ = DirectInfoPntr->window_bounds.bottom -
-      DirectInfoPntr->window_bounds.top + 1;
+
+    width_ = (int) (m_ReaderWindowPntr->m_ScreenSize.right -
+      m_ReaderWindowPntr->m_ScreenSize.left + 1.5);
+    height_ = (int) (m_ReaderWindowPntr->m_ScreenSize.bottom -
+      m_ReaderWindowPntr->m_ScreenSize.top + 1.5);
 
     // Update the cached stride value.
 
@@ -367,17 +552,22 @@ void FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings ()
       m_CachedStride = 0;
     else
       m_CachedStride = DirectInfoPntr->bytes_per_row /
-      DirectInfoPntr->bits_per_pixel;
+      ((DirectInfoPntr->bits_per_pixel + 7) / 8);
 
-    // Print out the new settings.
+    // Print out the new settings.  May cause a deadlock if you happen to be
+    // printing this when the video mode is switching, since the AppServer
+    // would be locked out and unable to display the printed text.  But
+    // that only happens in debug mode.
 
     char TempString [2048];
     sprintf (TempString,
-      "FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings new settings:\n"
-      "Width=%d, Stride=%d, Height=%d, Bits at $%08X,\n",
+      "UpdatePixelFormatEtc new settings: "
+      "Width=%d, Stride=%d, Height=%d, Bits at $%08X, ",
       width_, m_CachedStride, height_, (unsigned int) data);
     format.print (TempString + strlen (TempString),
       sizeof (TempString) - strlen (TempString));
     vlog.debug (TempString);
   }
+
+  return m_CachedPixelFormatVersion;
 }

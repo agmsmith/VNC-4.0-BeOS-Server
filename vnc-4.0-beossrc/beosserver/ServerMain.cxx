@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.4 2004/02/08 19:43:57 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.5 2004/06/07 01:06:50 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.5  2004/06/07 01:06:50  agmsmith
+ * Starting to get the SDesktop working with the frame buffer
+ * and a BDirectWindow.
+ *
  * Revision 1.4  2004/02/08 19:43:57  agmsmith
  * FrameBuffer class under construction.
  *
@@ -73,7 +77,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.4 2004/02/08 19:43:57 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.5 2004/06/07 01:06:50 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -179,6 +183,11 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
 
 void ServerApp::Pulse ()
 {
+  static bigtime_t TimeOfLastUpdateCheck = 0;
+
+  if (m_VNCServerPntr == NULL)
+    return;
+
   try
   {
     fd_set rfds;
@@ -211,6 +220,19 @@ void ServerApp::Pulse ()
     }
 
     m_VNCServerPntr->checkIdleTimeouts();
+
+    // Try copying data from the frame buffer to the clients, if any need it.
+    // Do this only when we've been idle for a while (1/10 second), otherwise
+    // the Pulse event queue will fill up with pending pulses.
+
+    if (system_time () - TimeOfLastUpdateCheck > 90000 /* microsecs */)
+    {
+      if (m_VNCServerPntr->clientsReadyForUpdate ())
+      {
+        m_VNCServerPntr->tryUpdate ();
+        TimeOfLastUpdateCheck = system_time ();
+      }
+    }
   }
   catch (rdr::Exception &e)
   {
@@ -249,7 +271,7 @@ void ServerApp::ReadyToRun ()
     vlog.error(e.str());
     PostMessage (B_QUIT_REQUESTED);
   }
-  SetPulseRate (1000000);
+  SetPulseRate (100000);
 }
 
 
