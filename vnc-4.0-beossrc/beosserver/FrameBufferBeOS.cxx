@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.5 2004/07/19 22:30:19 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.6 2004/11/27 22:52:42 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.6  2004/11/27 22:52:42  agmsmith
+ * Not much - display string should be shorter.
+ *
  * Revision 1.5  2004/07/19 22:30:19  agmsmith
  * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
  *
@@ -97,9 +100,13 @@ void ColourMapHolder::lookup (int index, int* r, int* g, int* b)
     IndexedColour.red = IndexedColour.green = 128;
     IndexedColour.blue = IndexedColour.alpha = 255;
   }
-  *r = IndexedColour.red;
-  *g = IndexedColour.green;
-  *b = IndexedColour.blue;
+
+  // Scale colours up to 16 bit component values, so white is 0xFFFF in all
+  // components and black is 0x0000 in all.
+
+  *r = IndexedColour.red * 255 + IndexedColour.red;
+  *g = IndexedColour.green * 255 + IndexedColour.green;
+  *b = IndexedColour.blue * 255 + IndexedColour.blue;
 }
 
 
