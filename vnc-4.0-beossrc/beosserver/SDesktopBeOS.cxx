@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.20 2005/01/02 21:05:33 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.21 2005/01/02 21:57:29 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.21  2005/01/02 21:57:29  agmsmith
+ * Made the event injector simpler - only need one device, not
+ * separate ones for keyboard and mouse.  Also renamed it to
+ * InputEventInjector to be in line with it's more general use.
+ *
  * Revision 1.20  2005/01/02 21:05:33  agmsmith
  * Found screen resolution bug - wasn't testing the screen width
  * or height to detect a change, just depth.  Along the way added
@@ -396,6 +401,7 @@ static inline void SetKeyState (
   uint8 BitMask;
   uint8 Index;
 
+
   if (KeyCode <= 0 || KeyCode >= 128)
     return; // Keycodes are from 1 to 127, zero means no key defined.
 
@@ -528,7 +534,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
       }
       else
       {
-      	// Draw a colourful rectangle.
+        // Draw a colourful rectangle.
         RectangleToUpdate.setXYWH (0, 0,
           m_TemporaryBitmap.width(), m_TemporaryBitmap.height());
         m_TemporaryBitmap.fillRect (RectangleToUpdate,
@@ -678,7 +684,6 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   vlog.debug ("VNC keycode $%04X received, key is %s.",
     key, down ? "down" : "up");
-
   NewKeyState = m_LastKeyState;
 
   // If it's a shift or other modifier key, update our internal modifiers
@@ -790,11 +795,11 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   KeyToUTF8Pntr = NULL;
   if ((m_LastKeyState.modifiers & B_COMMAND_KEY) == 0 &&
-  (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0 &&
-  key >= 0x40 /* @ sign */ && key <= 0x7f /* Del key */)
+  (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0)
   {
-    KeyToUTF8SearchData.vncKeyCode = key;
-    ControlCharacterAsUTF8 [0] = (key & 31);
+    key = (key & 31); // Force it to a control character.
+    KeyToUTF8SearchData.vncKeyCode = key; // Not really searching.
+    ControlCharacterAsUTF8 [0] = key;
     ControlCharacterAsUTF8 [1] = 0;
     KeyToUTF8SearchData.utf8String = ControlCharacterAsUTF8;
     KeyToUTF8Pntr = &KeyToUTF8SearchData;
@@ -825,11 +830,35 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   strcpy (KeyAsString, KeyToUTF8Pntr->utf8String);
   KeyCode = 0;
-  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY) &&
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0 &&
   /* Can't type control characters while the command key is down */
-  !(m_LastKeyState.modifiers & B_COMMAND_KEY))
+  (m_LastKeyState.modifiers & B_COMMAND_KEY) == 0)
+  {
+    /* This keymap doesn't work - converts control-D to the END key etc.
     KeyCode = FindKeyCodeFromMap (
       m_KeyMapPntr->control_map, KeyAsString);
+    */
+    if (key <= 0) // Control-space on the keyboard for NUL byte.
+      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, " ");
+    else if (key <= 26) // Control A to Z use the letter keys.
+    {
+      ControlCharacterAsUTF8 [0] = key + 0x60; // Lower case letter a to z.
+      ControlCharacterAsUTF8 [1] = 0;
+      KeyCode = FindKeyCodeFromMap (
+        m_KeyMapPntr->normal_map, ControlCharacterAsUTF8);
+    }
+    else if (key == 27)
+      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "[");
+    // Can't type code 28 in BeOS, no normal key for it.  Somebody goofed.
+    else if (key == 29)
+      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "]");
+    else if (key == 30)
+      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->shift_map, "^");
+    else if (key == 31)
+      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->shift_map, "_");
+    if (KeyCode == 0)
+      KeyCode = 1; // The rest get what's usually the escape key.
+  }
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
