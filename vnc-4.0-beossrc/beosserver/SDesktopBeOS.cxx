@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.12 2004/09/13 01:41:24 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.13 2004/11/27 22:53:59 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.13  2004/11/27 22:53:59  agmsmith
+ * Changed update technique to scan a small part of the screen each time
+ * so that big updates don't slow down the interactivity by being big.
+ * There is also an adaptive algorithm that makes the updates small
+ * enough to be quick on the average.
+ *
  * Revision 1.12  2004/09/13 01:41:24  agmsmith
  * Trying to get control keys working.
  *
@@ -453,10 +459,11 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
       m_BackgroundNumberOfScanLinesPerUpdate = Height;
 
     if (OldUpdateSize != m_BackgroundNumberOfScanLinesPerUpdate)
-      vlog.debug ("Background screen scan update size changed from %d to "
-      "%d pixel rows due to performance of %.4f updates per second in the "
-      "previous full screen frame.",
-      OldUpdateSize, m_BackgroundNumberOfScanLinesPerUpdate, UpdatesPerSecond);
+      vlog.debug ("Background update size changed from %d to %d scan lines "
+      "due to performance of %.4f updates per second in the previous full "
+      "screen frame.  Last frame achieved %.3f frames per second.",
+      OldUpdateSize, m_BackgroundNumberOfScanLinesPerUpdate,
+      UpdatesPerSecond, 1000000.0F / ElapsedTime);
 
     UpdateCounter++;
     sprintf (TempString, "Update #%d", UpdateCounter);
