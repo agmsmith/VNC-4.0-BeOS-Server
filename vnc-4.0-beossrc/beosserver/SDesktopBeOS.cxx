@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.19 2005/01/01 21:31:02 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.20 2005/01/02 21:05:33 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.20  2005/01/02 21:05:33  agmsmith
+ * Found screen resolution bug - wasn't testing the screen width
+ * or height to detect a change, just depth.  Along the way added
+ * some cool colour shifting animations on a fake screen.
+ *
  * Revision 1.19  2005/01/01 21:31:02  agmsmith
  * Added double click timing detection, so that you can now double
  * click on a window title to minimize it.  Was missing the "clicks"
@@ -413,9 +418,8 @@ SDesktopBeOS::SDesktopBeOS () :
   m_BackgroundNumberOfScanLinesPerUpdate (32),
   m_BackgroundUpdateStartTime (0),
   m_DoubleClickTimeLimit (500000),
+  m_EventInjectorPntr (NULL),
   m_FrameBufferBeOSPntr (NULL),
-  m_InputDeviceKeyboardPntr (NULL),
-  m_InputDeviceMousePntr (NULL),
   m_KeyCharStrings (NULL),
   m_KeyMapPntr (NULL),
   m_LastMouseButtonState (0),
@@ -446,10 +450,8 @@ SDesktopBeOS::~SDesktopBeOS ()
   delete m_FrameBufferBeOSPntr;
   m_FrameBufferBeOSPntr = NULL;
 
-  delete m_InputDeviceKeyboardPntr;
-  m_InputDeviceKeyboardPntr = NULL;
-  delete m_InputDeviceMousePntr;
-  m_InputDeviceMousePntr = NULL;
+  delete m_EventInjectorPntr;
+  m_EventInjectorPntr = NULL;
 }
 
 
@@ -670,7 +672,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   VNCKeyToUTF8Pointer KeyToUTF8Pntr;
   key_info            NewKeyState;
 
-  if (m_InputDeviceKeyboardPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
+  if (m_EventInjectorPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
   m_FrameBufferBeOSPntr->width () <= 0 || m_KeyMapPntr == NULL)
     return;
 
@@ -737,7 +739,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
       EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
       EventMessage.AddData ("states",
         B_UINT8_TYPE, &NewKeyState.key_states, 16);
-      m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+      m_EventInjectorPntr->Control ('EInj', &EventMessage);
       EventMessage.MakeEmpty ();
     }
 
@@ -776,7 +778,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     EventMessage.AddData ("states", B_UINT8_TYPE,
       m_LastKeyState.key_states, 16);
     EventMessage.AddInt32 ("raw_char", KeyAsString [0]);
-    m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+    m_EventInjectorPntr->Control ('EInj', &EventMessage);
     EventMessage.MakeEmpty ();
     return;
   }
@@ -874,7 +876,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     EventMessage.AddData ("states", B_UINT8_TYPE,
       m_LastKeyState.key_states, 16);
     EventMessage.AddInt32 ("raw_char", key & 0xFF); // Could be wrong.
-    m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+    m_EventInjectorPntr->Control ('EInj', &EventMessage);
     EventMessage.MakeEmpty ();
     return;
   }
@@ -893,7 +895,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
 void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
 {
-  if (m_InputDeviceMousePntr == NULL || m_FrameBufferBeOSPntr == NULL ||
+  if (m_EventInjectorPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
   m_ServerPntr == NULL || m_FrameBufferBeOSPntr->width () <= 0)
     return;
 
@@ -968,7 +970,7 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
       m_LastMouseDownTime = CurrentTime;
     }
 
-    m_InputDeviceMousePntr->Control ('ViNC', &EventMessage);
+    m_EventInjectorPntr->Control ('EInj', &EventMessage);
     EventMessage.MakeEmpty ();
 
     // Also request a screen update later on for the area around the mouse
@@ -1013,7 +1015,7 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
     }
   }
   if (EventMessage.what != 0)
-    m_InputDeviceMousePntr->Control ('ViNC', &EventMessage);
+    m_EventInjectorPntr->Control ('EInj', &EventMessage);
 
   m_LastMouseButtonState = buttonmask;
   m_LastMouseX = AbsoluteX;
@@ -1052,7 +1054,7 @@ void SDesktopBeOS::SendUnmappedKeys (
       EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
       EventMessage.AddData ("states",
         B_UINT8_TYPE, &NewKeyState.key_states, 16);
-      m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+      m_EventInjectorPntr->Control ('EInj', &EventMessage);
       EventMessage.MakeEmpty ();
     }
   }
@@ -1075,10 +1077,9 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
     m_FrameBufferBeOSPntr = new FrameBufferBeOS;
   m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
 
-  if (m_InputDeviceKeyboardPntr == NULL)
-    m_InputDeviceKeyboardPntr = find_input_device ("VNC Fake Keyboard");
-  if (m_InputDeviceMousePntr == NULL)
-    m_InputDeviceMousePntr = find_input_device ("VNC Fake Mouse");
+  if (m_EventInjectorPntr == NULL)
+    m_EventInjectorPntr =
+    find_input_device ("InputEventInjector FakeKeyboard");
 
   if (m_KeyMapPntr != NULL || m_KeyCharStrings != NULL)
     throw rfb::Exception ("SDesktopBeOS::start: key map pointers not "
@@ -1103,10 +1104,8 @@ void SDesktopBeOS::stop ()
   m_FrameBufferBeOSPntr = NULL;
   m_ServerPntr->setPixelBuffer (NULL);
 
-  delete m_InputDeviceKeyboardPntr;
-  m_InputDeviceKeyboardPntr = NULL;
-  delete m_InputDeviceMousePntr;
-  m_InputDeviceMousePntr = NULL;
+  delete m_EventInjectorPntr;
+  m_EventInjectorPntr = NULL;
 }
 
 

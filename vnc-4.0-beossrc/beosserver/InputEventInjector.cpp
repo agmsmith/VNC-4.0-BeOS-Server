@@ -1,19 +1,19 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/VNCAppServerInterface.cpp,v 1.1 2004/07/04 20:25:28 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.2 2004/09/13 00:01:26 agmsmith Exp agmsmith $
  *
  * This is the add-in (shared .so library for BeOS) which injects keyboard and
  * mouse events into the BeOS InputServer, letting the remote system move the
  * mouse and simulate keyboard button presses.
  *
  * Put the shared library file created by this project (its default name is
- * "VNCAppServerInterface") into /boot/home/config/add-ons/input_server/devices
+ * "InputEventInjector") into /boot/home/config/add-ons/input_server/devices
  * to install it.
  *
- * It registers itself as a keyboard device and a mouse device with the
- * InputServer.  It also receives messages from other programs using the
- * BInputDevice Control system, and then copies and forwards those messages to
- * the InputServer.  So it could be used by other programs than VNC, if
- * desired.
+ * It registers itself as a keyboard device with the InputServer, though it can
+ * inject any kind of message, including mouse ones.  It also receives messages
+ * from other programs using the BInputDevice Control system, and then copies
+ * and forwards those messages to the InputServer.  So it could be used by
+ * other programs than VNC, if desired.
  *
  * Copyright (C) 2004 by Alexander G. M. Smith.  All Rights Reserved.
  *
@@ -31,7 +31,10 @@
  * this software; if not, write to the Free Software Foundation, Inc., 59
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Log: VNCAppServerInterface.cpp,v $
+ * $Log: InputEventInjector.cpp,v $
+ * Revision 1.2  2004/09/13 00:01:26  agmsmith
+ * Added installation instructions and a version string.
+ *
  * Revision 1.1  2004/07/04 20:25:28  agmsmith
  * Initial revision
  */
@@ -52,26 +55,19 @@
 
 extern "C" _EXPORT BInputServerDevice* instantiate_input_device (void);
 
-const char VNCAppServerInterfaceVersionString [] = "$Header: $";
+const char InputEventInjectorVersionString [] =
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.2 2004/09/13 00:01:26 agmsmith Exp agmsmith $";
 
 static struct input_device_ref FakeKeyboardLink =
 {
-  "VNC Fake Keyboard",
+  "InputEventInjector FakeKeyboard", // Max 31 characters to be safe.
   B_KEYBOARD_DEVICE,
-  (void *) 1 /* cookie */
+  (void *) 76543210 /* cookie */
 };
 
-static struct input_device_ref FakeMouseLink =
-{
-  "VNC Fake Mouse",
-  B_POINTING_DEVICE,
-  (void *) 2 /* cookie */
-};
-
-static struct input_device_ref *RegistrationRefList [3] =
+static struct input_device_ref *RegistrationRefList [2] =
 {
   &FakeKeyboardLink,
-  &FakeMouseLink,
   NULL
 };
 
@@ -81,11 +77,11 @@ static struct input_device_ref *RegistrationRefList [3] =
  * The main class, does just about everything.
  */
 
-class VNCAppServerInterface : public BInputServerDevice
+class InputEventInjector : public BInputServerDevice
 {
 public:
-  VNCAppServerInterface ();
-  virtual ~VNCAppServerInterface ();
+  InputEventInjector ();
+  virtual ~InputEventInjector ();
   virtual status_t InitCheck ();
   virtual status_t Start (const char *device, void *cookie);
   virtual status_t Stop (const char *device, void *cookie);
@@ -94,22 +90,21 @@ public:
 
 protected:
   bool m_KeyboardEnabled;
-  bool m_MouseEnabled;
 };
 
 
-VNCAppServerInterface::VNCAppServerInterface ()
-: m_KeyboardEnabled (false), m_MouseEnabled (false)
+InputEventInjector::InputEventInjector ()
+: m_KeyboardEnabled (false)
 {
 }
 
 
-VNCAppServerInterface::~VNCAppServerInterface ()
+InputEventInjector::~InputEventInjector ()
 {
 }
 
 
-status_t VNCAppServerInterface::InitCheck ()
+status_t InputEventInjector::InitCheck ()
 {
   RegisterDevices (RegistrationRefList);
 
@@ -117,12 +112,10 @@ status_t VNCAppServerInterface::InitCheck ()
 }
 
 
-status_t VNCAppServerInterface::Start (const char *device, void *cookie)
+status_t InputEventInjector::Start (const char *device, void *cookie)
 {
-  if ((int) cookie == 1)
+  if ((int) cookie == 76543210)
     m_KeyboardEnabled = true;
-  else if ((int) cookie == 2)
-    m_MouseEnabled = true;
   else
     return B_ERROR;
 
@@ -130,12 +123,10 @@ status_t VNCAppServerInterface::Start (const char *device, void *cookie)
 }
 
 
-status_t VNCAppServerInterface::Stop (const char *device, void *cookie)
+status_t InputEventInjector::Stop (const char *device, void *cookie)
 {
-  if ((int) cookie == 1)
+  if ((int) cookie == 76543210)
     m_KeyboardEnabled = false;
-  else if ((int) cookie == 2)
-    m_MouseEnabled = false;
   else
     return B_ERROR;
 
@@ -143,7 +134,7 @@ status_t VNCAppServerInterface::Stop (const char *device, void *cookie)
 }
 
 
-status_t VNCAppServerInterface::Control (
+status_t InputEventInjector::Control (
   const char *device,
   void *cookie,
   uint32 code,
@@ -151,17 +142,9 @@ status_t VNCAppServerInterface::Control (
 {
   BMessage *EventMsgPntr = NULL;
 
-  if ((int) cookie == 1)
+  if ((int) cookie == 76543210)
   {
-    if (m_KeyboardEnabled && code == 'ViNC' && message != NULL)
-    {
-      EventMsgPntr = new BMessage (*message);
-      return EnqueueMessage (EventMsgPntr);
-    }
-  }
-  else if ((int) cookie == 2)
-  {
-    if (m_MouseEnabled && code == 'ViNC' && message != NULL)
+    if (m_KeyboardEnabled && code == 'EInj' && message != NULL)
     {
       EventMsgPntr = new BMessage (*message);
       return EnqueueMessage (EventMsgPntr);
@@ -177,5 +160,5 @@ status_t VNCAppServerInterface::Control (
 
 BInputServerDevice* instantiate_input_device (void)
 {
-  return new VNCAppServerInterface;
+  return new InputEventInjector;
 }

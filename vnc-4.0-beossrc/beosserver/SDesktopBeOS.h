@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.10 2005/01/01 21:31:02 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.11 2005/01/02 21:05:33 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.11  2005/01/02 21:05:33  agmsmith
+ * Found screen resolution bug - wasn't testing the screen width
+ * or height to detect a change, just depth.  Along the way added
+ * some cool colour shifting animations on a fake screen.
+ *
  * Revision 1.10  2005/01/01 21:31:02  agmsmith
  * Added double click timing detection, so that you can now double
  * click on a window title to minimize it.  Was missing the "clicks"
@@ -153,17 +158,16 @@ protected:
     // click rather than a single click.  Grabbed from the OS preferences when
     // the desktop starts up.
 
-  class FrameBufferBeOS *m_FrameBufferBeOSPntr;
-    // Our FrameBufferBeOS instance and the associated BDirectWindowReader
-    // (which may or may not exist) which is used for accessing the frame
-    // buffer.  NULL if it hasn't been created.
-
-  BInputDevice *m_InputDeviceKeyboardPntr;
-  BInputDevice *m_InputDeviceMousePntr;
+  BInputDevice *m_EventInjectorPntr;
     // Gives access to our Input Server add-on which lets us inject mouse and
     // keyboard event messages.  NULL if the connection isn't open or isn't
     // available.  Connected when the desktop starts, disconnected when it
     // stops.
+
+  class FrameBufferBeOS *m_FrameBufferBeOSPntr;
+    // Our FrameBufferBeOS instance and the associated BDirectWindowReader
+    // (which may or may not exist) which is used for accessing the frame
+    // buffer.  NULL if it hasn't been created.
 
   char    *m_KeyCharStrings;
   key_map *m_KeyMapPntr;
