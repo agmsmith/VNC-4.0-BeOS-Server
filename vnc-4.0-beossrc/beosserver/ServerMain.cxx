@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.3 2004/01/25 02:57:42 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.4 2004/02/08 19:43:57 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.4  2004/02/08 19:43:57  agmsmith
+ * FrameBuffer class under construction.
+ *
  * Revision 1.3  2004/01/25 02:57:42  agmsmith
  * Removed loading and saving of settings, just specify the command line
  * options every time it is activated.
@@ -42,10 +45,8 @@
 /* VNC library headers. */
 
 #include <network/TcpSocket.h>
-#include <rfb/FrameBuffer.h>
 #include <rfb/Logger_stdio.h>
 #include <rfb/LogWriter.h>
-#include <rfb/SDesktop.h>
 #include <rfb/SSecurityFactoryStandard.h>
 #include <rfb/VNCServerST.h>
 
@@ -53,10 +54,12 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <DirectWindow.h>
+#include <Locker.h>
 
 /* Our source code */
 
-#include "FrameBufferBeOS.h"
+#include "SDesktopBeOS.h"
 
 
 
@@ -70,7 +73,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.3 2004/01/25 02:57:42 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.4 2004/02/08 19:43:57 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -112,7 +115,7 @@ public: /* Constructor and destructor. */
   virtual void ReadyToRun ();
 
 public: /* Member variables. */
-  rfb::SStaticDesktop *m_FakeDesktopPntr;
+  SDesktopBeOS *m_FakeDesktopPntr;
     /* Provides access to the frame buffer, mouse, etc for VNC to use. */
 
   network::TcpListener *m_TcpListenerPntr;
@@ -151,8 +154,6 @@ ServerApp::~ServerApp ()
 void ServerApp::AboutRequested ()
 {
   BAlert *AboutAlertPntr;
-
-  FrameBufferBeOS Bleeble;
 
   AboutAlertPntr = new BAlert ("About", g_AboutText, "Done");
   if (AboutAlertPntr != NULL)
@@ -232,7 +233,7 @@ void ServerApp::ReadyToRun ()
   {
     /* VNC Setup. */
 
-    m_FakeDesktopPntr = new rfb::SStaticDesktop (rfb::Point (640, 480));
+    m_FakeDesktopPntr = new SDesktopBeOS ();
 
     m_VNCServerPntr = new rfb::VNCServerST ("MyBeOSVNCServer",
       m_FakeDesktopPntr, NULL);

@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.1 2004/02/08 19:44:17 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.2 2004/02/08 21:13:34 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.2  2004/02/08 21:13:34  agmsmith
+ * BDirectWindow stuff under construction.
+ *
  * Revision 1.1  2004/02/08 19:44:17  agmsmith
  * Initial revision
  */
@@ -93,55 +96,8 @@ void TransparentBView::AttachedToWindow (void)
 
 
 /******************************************************************************
- * This variation of BDirectWindow allows us to capture the pixels on the
- * screen.  It works by changing the window's size to cover the whole screen,
- * then makes itself invisible (window borders off screen and background redraw
- * set to non-draw transparent) and moves behind all other windows (so users
- * can't click on it).  Then rather than the conventional use of a
- * BDirectWindow where the application writes to the frame buffer memory
- * directly, we just read it directly.
+ * Our variation of a BDirectWindow.
  */
-
-class BDirectWindowReader : public BDirectWindow
-{
-public:
-  BDirectWindowReader ();
-  virtual ~BDirectWindowReader ();
-
-  virtual void DirectConnected (direct_buffer_info *ConnectionInfoPntr);
-    // Callback called by the OS when the video resolution changes or the frame
-    // buffer setup is otherwise changed.
-
-  bool m_Connected;
-    // TRUE if we are connected to the video memory, FALSE if not.  TRUE means
-    // that video memory has been mapped into this process's address space and
-    // we have a valid pointer to the frame buffer.  Don't try reading from
-    // video memory if this is FALSE!
-
-  unsigned int m_ConnectionVersion;
-    // A counter that is bumped up by one every time the connection changes.
-    // Makes it easy to see if your cached connection info is still valid.
-
-  BLocker m_ConnectionLock;
-    // This mutual exclusion lock makes sure that the callbacks from the OS to
-    // notify the window about frame buffer changes (usually a screen
-    // resolution change and the resulting change in frame buffer address and
-    // size) are mutually exclusive from other window operations (like reading
-    // the frame buffer or destroying the window).  Maximum lock time is 3
-    // seconds, then the OS might kill the program for not responding.
-
-  volatile bool m_DoNotConnect;
-    // A flag that the destructor sets to tell the rest of the window code not
-    // to try reconnecting to the frame buffer.
-
-  direct_buffer_info m_SavedFrameBufferInfo;
-  	// A copy of the frame buffer information (bitmap address, video mode,
-  	// screen size) from the last direct connection callback by the OS.  Only
-  	// valid if m_Connected is true.  You should also lock m_ConnectionLock
-  	// while reading information from this structure, so it doesn't change
-  	// unexpectedly.
-};
-
 
 BDirectWindowReader::BDirectWindowReader ()
   : BDirectWindow (BRect (0, 0, 1, 1), "BDirectWindowReader",
@@ -184,7 +140,7 @@ void BDirectWindowReader::DirectConnected (
   direct_buffer_info *ConnectionInfoPntr)
 {
   if (!m_Connected && m_DoNotConnect)
-  	return; // Shutting down or otherwise don't want to make a connection.
+      return; // Shutting down or otherwise don't want to make a connection.
 
   m_ConnectionLock.Lock ();
 
@@ -206,14 +162,128 @@ void BDirectWindowReader::DirectConnected (
 }
 
 
+unsigned int BDirectWindowReader::getPixelFormat (rfb::PixelFormat &pf)
+{
+  unsigned int EndianTest;
+  unsigned int ReturnValue;
+
+  m_ConnectionLock.Lock ();
+  if (!m_Connected)
+  {
+    // Oops, looks like there is no frame buffer set up.
+    m_ConnectionLock.Unlock ();
+    return 0;
+  }
+
+  // Set up some initial default values.  The actual values will be put in
+  // depending on the particular video mode.
+
+  pf.bpp = m_SavedFrameBufferInfo.bits_per_pixel;
+  // Number of actual colour bits, excluding alpha and pad bits.
+  pf.depth = m_SavedFrameBufferInfo.bits_per_pixel;
+  pf.trueColour = true; // It usually is a non-palette video mode.
+
+  EndianTest = 1;
+  pf.bigEndian = ((* (unsigned char *) &EndianTest) == 0);
+
+  pf.blueShift = 0;
+  pf.greenShift = 8;
+  pf.redShift = 16;
+  pf.redMax = pf.greenMax = pf.blueMax = 255;
+
+  // Now set it according to the actual screen format.
+
+  switch (m_SavedFrameBufferInfo.pixel_format)
+  {
+    case B_RGB32: // xRGB 8:8:8:8, stored as little endian uint32
+    case B_RGBA32: // ARGB 8:8:8:8, stored as little endian uint32
+      pf.bpp = 32;
+      pf.depth = 24;
+      pf.blueShift = 0;
+      pf.greenShift = 8;
+      pf.redShift = 16;
+      pf.redMax = pf.greenMax = pf.blueMax = 255;
+      break;
+
+    case B_RGB24:
+      pf.bpp = 24;
+      pf.depth = 24;
+      pf.blueShift = 0;
+      pf.greenShift = 8;
+      pf.redShift = 16;
+      pf.redMax = pf.greenMax = pf.blueMax = 255;
+      break;
+
+    case B_RGB16: // xRGB 5:6:5, stored as little endian uint16
+      pf.bpp = 16;
+      pf.depth = 16;
+      pf.blueShift = 0;
+      pf.greenShift = 5;
+      pf.redShift = 11;
+      pf.redMax = 31;
+      pf.greenMax = 63;
+      pf.blueMax = 31;
+      break;
+
+    case B_RGB15: // RGB 1:5:5:5, stored as little endian uint16
+    case B_RGBA15: // ARGB 1:5:5:5, stored as little endian uint16
+      pf.bpp = 16;
+      pf.depth = 15;
+      pf.blueShift = 0;
+      pf.greenShift = 5;
+      pf.redShift = 10;
+      pf.redMax = pf.greenMax = pf.blueMax = 31;
+      break;
+
+    case B_CMAP8: // 256-color index into the color table.
+    case B_GRAY8: // 256-color greyscale value.
+      pf.bpp = 8;
+      pf.depth = 8;
+      pf.blueShift = 0;
+      pf.greenShift = 2;
+      pf.redShift = 4;
+      pf.redMax = 3;
+      pf.greenMax = 3;
+      pf.blueMax = 3;
+      pf.trueColour = false;
+      break;
+      
+    case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
+    case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
+    case B_RGB24_BIG: // Currently unused
+    case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
+    case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
+    case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
+      vlog.error ("Unimplemented big endian video mode #%d in "
+      "BDirectWindowReader::getPixelFormat.\n",
+      (unsigned int) m_SavedFrameBufferInfo.pixel_format);
+      break;
+    
+    default:
+      vlog.error ("Unimplemented video mode #%d in "
+      "BDirectWindowReader::getPixelFormat.\n",
+      (unsigned int) m_SavedFrameBufferInfo.pixel_format);
+      break;
+  }
+
+  ReturnValue = m_ConnectionVersion;
+    // Grab a copy since it may change when the lock is unlocked.
+
+  m_ConnectionLock.Unlock ();
+  return ReturnValue;
+}
+
+
 
 /******************************************************************************
  * Implementation of the FrameBufferBeOS class.  Constructor, destructor and
  * the rest of the member functions in mostly alphabetical order.
  */
 
-FrameBufferBeOS::FrameBufferBeOS ()
-  : m_ReaderWindowPntr (NULL)
+FrameBufferBeOS::FrameBufferBeOS () :
+  m_ReaderWindowPntr (NULL),
+  m_CachedPixelFormatVersion (0),
+  m_CachedStride (0)
 {
   vlog.debug ("Constructing a FrameBufferBeOS object.\n");
 
@@ -239,13 +309,75 @@ FrameBufferBeOS::~FrameBufferBeOS ()
 }
 
 
+int FrameBufferBeOS::getStride () const
+{
+  return m_CachedStride;
+}
+
+
 void FrameBufferBeOS::grabRect (const rfb::Rect &rect)
 {
+  // Does nothing in BeOS, since the frame buffer is the screen and doesn't
+  // need grabbing.  Also, grabRegion is the normal function used, grabRect is
+  // only used by Windows (grabRegion iterates through all rectangles and calls
+  // grabRect for each one).
+  UpdateToCurrentScreenBitmapSettings ();
+}
+
+
+void FrameBufferBeOS::grabRegion (const rfb::Region &rgn)
+{
+  UpdateToCurrentScreenBitmapSettings ();
+}
+
+
+void FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings ()
+{
+  direct_buffer_info *DirectInfoPntr;
+
   if (m_ReaderWindowPntr == NULL)
   {
-    vlog.debug ("FrameBufferBeOS::grabRect called for the first time, "
-      "initialising frame buffer access.\n");
+    vlog.debug ("FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings "
+    "called for the first time, initialising frame buffer access.\n");
     m_ReaderWindowPntr = new BDirectWindowReader;
     m_ReaderWindowPntr->Show (); // Opens the window and starts its thread.
+  }
+
+  // We just have to make sure that the settings (width, height, bitmap data
+  // pointer, etc) are up to date, and hopefully not changing until the
+  // grabbing has been done.
+
+  if (m_CachedPixelFormatVersion !=
+  m_ReaderWindowPntr->m_ConnectionVersion)
+  {
+    m_CachedPixelFormatVersion = m_ReaderWindowPntr->getPixelFormat (format);
+    DirectInfoPntr = &m_ReaderWindowPntr->m_SavedFrameBufferInfo;
+
+    // Also update the real data - the actual bits and buffer size.
+
+    data = (rdr::U8 *) DirectInfoPntr->bits;
+    width_ = DirectInfoPntr->window_bounds.right -
+      DirectInfoPntr->window_bounds.left + 1;
+    height_ = DirectInfoPntr->window_bounds.bottom -
+      DirectInfoPntr->window_bounds.top + 1;
+
+    // Update the cached stride value.
+
+    if (DirectInfoPntr->bits_per_pixel <= 0)
+      m_CachedStride = 0;
+    else
+      m_CachedStride = DirectInfoPntr->bytes_per_row /
+      DirectInfoPntr->bits_per_pixel;
+
+    // Print out the new settings.
+
+    char TempString [2048];
+    sprintf (TempString,
+      "FrameBufferBeOS::UpdateToCurrentScreenBitmapSettings new settings:\n"
+      "Width=%d, Stride=%d, Height=%d, Bits at $%08X,\n",
+      width_, m_CachedStride, height_, (unsigned int) data);
+    format.print (TempString + strlen (TempString),
+      sizeof (TempString) - strlen (TempString));
+    vlog.debug (TempString);
   }
 }
