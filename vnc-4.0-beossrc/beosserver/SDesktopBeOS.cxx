@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.4 2004/07/19 22:30:19 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.5 2004/07/25 21:03:27 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.5  2004/07/25 21:03:27  agmsmith
+ * Under construction, adding keymap and keycode simulation.
+ *
  * Revision 1.4  2004/07/19 22:30:19  agmsmith
  * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
  *
@@ -72,6 +75,44 @@
 static rfb::LogWriter vlog("SDesktopBeOS");
 
 
+
+/******************************************************************************
+ * Utility functions.
+ */
+
+static inline void SetKeyState (
+  key_info &KeyState,
+  uint8 KeyCode,
+  uint32 KeyIsDown)
+{
+  uint8 BitMask;
+  uint8 Index;
+
+  if (KeyCode <= 0 || KeyCode >= 128)
+    return; // Keycodes are from 1 to 127, zero means no key defined.
+
+  Index = KeyCode / 8;
+  BitMask = (1 << (7 - (KeyCode & 7)));
+  if (KeyIsDown)
+    KeyState.key_states[Index] |= BitMask;
+  else
+    KeyState.key_states[Index] &= ~BitMask;
+}
+
+
+void SendUnmappedKeys (key_info &OldKeyState, key_info &NewKeyState)
+{
+    // Sends B_UNMAPPED_KEY_UP or B_UNMAPPED_KEY_DOWN messages for all keys
+    // that have changed between the old and new states.
+bleeble;
+}
+
+
+
+/******************************************************************************
+ * The SDesktopBeOS class, methods follow in mostly alphabetical order.
+ */
+
 SDesktopBeOS::SDesktopBeOS () :
   m_FrameBufferBeOSPntr (NULL),
   m_InputDeviceKeyboardPntr (NULL),
@@ -105,53 +146,13 @@ SDesktopBeOS::~SDesktopBeOS ()
 }
 
 
-void SDesktopBeOS::setServer (rfb::VNCServer *ServerPntr)
+void SDesktopBeOS::forcedUpdateCheck ()
 {
-  vlog.debug ("setServer called.");
-  m_ServerPntr = ServerPntr;
-}
-
-
-void SDesktopBeOS::start (rfb::VNCServer* vs)
-{
-  vlog.debug ("start called.");
-
-  if (m_FrameBufferBeOSPntr == NULL)
-    m_FrameBufferBeOSPntr = new FrameBufferBeOS;
-  m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
-
-  if (m_InputDeviceKeyboardPntr == NULL)
-    m_InputDeviceKeyboardPntr = find_input_device ("VNC Fake Keyboard");
-  if (m_InputDeviceMousePntr == NULL)
-    m_InputDeviceMousePntr = find_input_device ("VNC Fake Mouse");
-
-  if (m_KeyMapPntr != NULL || m_KeyCharStrings != NULL)
-    throw rfb::Exception ("SDesktopBeOS::start: key map pointers not "
-    "NULL, bug!");
-  get_key_map (&m_KeyMapPntr, &m_KeyCharStrings);
-  if (m_KeyMapPntr == NULL || m_KeyCharStrings == NULL)
-    throw rfb::Exception ("SDesktopBeOS::start: get_key_map has failed, "
-    "so we can't simulate the keyboard buttons being pressed!");
-}
-
-
-void SDesktopBeOS::stop ()
-{
-  vlog.debug ("stop called.");
-
-  free (m_KeyCharStrings);
-  m_KeyCharStrings = NULL;
-  free (m_KeyMapPntr);
-  m_KeyMapPntr = NULL;
-
-  delete m_FrameBufferBeOSPntr;
-  m_FrameBufferBeOSPntr = NULL;
-  m_ServerPntr->setPixelBuffer (NULL);
-
-  delete m_InputDeviceKeyboardPntr;
-  m_InputDeviceKeyboardPntr = NULL;
-  delete m_InputDeviceMousePntr;
-  m_InputDeviceMousePntr = NULL;
+  if (system_time () > m_NextForcedUpdateTime)
+  {
+    framebufferUpdateRequest ();
+    m_NextForcedUpdateTime = system_time () + 10000000;
+  }
 }
 
 
@@ -199,16 +200,6 @@ void SDesktopBeOS::framebufferUpdateRequest ()
 }
 
 
-void SDesktopBeOS::forcedUpdateCheck ()
-{
-  if (system_time () > m_NextForcedUpdateTime)
-  {
-    framebufferUpdateRequest ();
-    m_NextForcedUpdateTime = system_time () + 10000000;
-  }
-}
-
-
 rfb::Point SDesktopBeOS::getFbSize ()
 {
   vlog.debug ("getFbSize called.");
@@ -223,6 +214,106 @@ rfb::Point SDesktopBeOS::getFbSize ()
       m_FrameBufferBeOSPntr->width (), m_FrameBufferBeOSPntr->height ());
   }
   return rfb::Point (640, 480);
+}
+
+
+void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
+{
+  uint32   ChangedModifiers; // B_SHIFT_KEY, B_COMMAND_KEY, B_LEFT_SHIFT_KEY...
+  BMessage EventMessage;
+  key_info NewKeyState;
+
+  printf ("SDesktopBeOS::keyEvent  Key %X, down: %d\n", key, down);
+
+  if (m_InputDeviceKeyboardPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
+  m_FrameBufferBeOSPntr->width () <= 0 || m_KeyMapPntr == NULL)
+    return;
+
+  NewKeyState = m_LastKeyState;
+
+  // If it's a shift or other modifier key, update our internal modifiers
+  // state.
+
+  switch (key)
+  {
+    case XK_Caps_Lock: ChangedModifiers = B_CAPS_LOCK; break;
+    case XK_Scroll_Lock: ChangedModifiers = B_SCROLL_LOCK; break;
+    case XK_Num_Lock: ChangedModifiers = B_NUM_LOCK; break;
+    case XK_Shift_L: ChangedModifiers = B_LEFT_SHIFT_KEY; break;
+    case XK_Shift_R: ChangedModifiers = B_RIGHT_SHIFT_KEY; break;
+    case XK_Control_L: ChangedModifiers = B_LEFT_CONTROL_KEY; break;
+    case XK_Control_R: ChangedModifiers = B_RIGHT_CONTROL_KEY; break;
+    case XK_Alt_L: ChangedModifiers = B_LEFT_COMMAND_KEY; break;
+    case XK_Alt_R: ChangedModifiers = B_RIGHT_COMMAND_KEY; break;
+    case XK_Meta_L: ChangedModifiers = B_LEFT_OPTION_KEY; break;
+    case XK_Meta_R: ChangedModifiers = B_RIGHT_OPTION_KEY; break;
+    default: ChangedModifiers = 0;
+  }
+
+  // Update the modifiers for the particular modifier key if one was pressed.
+
+  if (ChangedModifiers != 0)
+  {
+    if (down)
+      NewKeyState.modifiers |= ChangedModifiers;
+    else
+      NewKeyState.modifiers &= ~ChangedModifiers;
+
+    UpdateDerivedModifiersAndPressedModifierKeys (NewKeyState);
+
+    SendUnmappedKeys (m_LastKeyState, NewKeyState);
+
+    if (NewKeyState.modifiers != m_LastKeyState.modifiers)
+    {
+      // Send a B_MODIFIERS_CHANGED message to update the system with the new
+      // modifier key settings.
+      
+bleeble;      
+      B_MODIFIERS_CHANGED 
+Source: The system. 
+Target: The focus view's window. 
+Sent when the user presses or releases a modifier key. 
+
+Field
+Type code
+Description
+"when"
+B_INT64_TYPE
+Event time, in microseconds since 01/01/70
+"modifiers"
+B_INT32_TYPE
+The current modifier keys. See <x>
+"be:old_modifiers"
+B_INT32_TYPE
+The previous modifier keys.
+"states"
+B_UINT8_TYPE
+T
+
+
+    BMessage: what = _MCH (0x5f4d4348, or 1598899016)
+    entry           when, type='LLNG', c=1, size= 8, data[0]: 0x1546cc47a (5711381626, '')
+    entry      modifiers, type='LONG', c=1, size= 4, data[0]: 0x20 (32, '')
+    entry be:old_modifiers, type='LONG', c=1, size= 4, data[0]: 0x422 (1058, '')
+    entry         states, type='UBYT', c=1, size=16,   
+        EventMessage.what = B_MODIFIERS_CHANGED;
+        EventMessage.AddInt64 ("when", system_time ());
+        EventMessage.AddInt32 ("modifiers", 0);
+        EventMessage.AddData ("states", B_UINT8_TYPE, KeyAsString, 16);
+      
+    }
+    
+    if (ChangedModifiers != B_SCROLL_LOCK)
+      return; // No actual typeable key was pressed, nothing further to do.
+  }
+
+
+  // Type the selected key.
+  switch (key)
+  {
+  }
+  // Tell the system to use the new modifier settings.
+  // Tell the system to type the keys for the letter, if any.
 }
 
 
@@ -334,124 +425,53 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
 }
 
 
-void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
+void SDesktopBeOS::setServer (rfb::VNCServer *ServerPntr)
 {
-  uint32   ChangedModifiers; // B_SHIFT_KEY, B_COMMAND_KEY, B_LEFT_SHIFT_KEY...
-  BMessage EventMessage;
-  key_info NewKeyState;
-
-  printf ("SDesktopBeOS::keyEvent  Key %X, down: %d\n", key, down);
-
-  if (m_InputDeviceKeyboardPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
-  m_FrameBufferBeOSPntr->width () <= 0 || m_KeyMapPntr == NULL)
-    return;
-
-  NewKeyState = m_LastKeyState;
-
-  // If it's a shift or other modifier key, update our internal modifiers
-  // state.
-
-  switch (key)
-  {
-    case XK_Caps_Lock: ChangedModifiers = B_CAPS_LOCK; break;
-    case XK_Scroll_Lock: ChangedModifiers = B_SCROLL_LOCK; break;
-    case XK_Num_Lock: ChangedModifiers = B_NUM_LOCK; break;
-    case XK_Shift_L: ChangedModifiers = B_LEFT_SHIFT_KEY; break;
-    case XK_Shift_R: ChangedModifiers = B_RIGHT_SHIFT_KEY; break;
-    case XK_Control_L: ChangedModifiers = B_LEFT_CONTROL_KEY; break;
-    case XK_Control_R: ChangedModifiers = B_RIGHT_CONTROL_KEY; break;
-    case XK_Alt_L: ChangedModifiers = B_LEFT_COMMAND_KEY; break;
-    case XK_Alt_R: ChangedModifiers = B_RIGHT_COMMAND_KEY; break;
-    case XK_Meta_L: ChangedModifiers = B_LEFT_OPTION_KEY; break;
-    case XK_Meta_R: ChangedModifiers = B_RIGHT_OPTION_KEY; break;
-    default: ChangedModifiers = 0;
-  }
-
-  // Update the modifiers for the particular modifier key if one was pressed.
-
-  if (ChangedModifiers != 0)
-  {
-    if (down)
-      NewKeyState.modifiers |= ChangedModifiers;
-    else
-      NewKeyState.modifiers &= ~ChangedModifiers;
-
-    UpdateDerivedModifiersAndPressedModifierKeys (NewKeyState);
-
-bleeble:    
-    SendChangedUnmappedKeyEvents (NewKeyState);
-
-    if (NewKeyState.modifiers != m_LastKeyState.modifiers)
-    {
-      // Send a B_MODIFIERS_CHANGED message to update the system with the new
-      // modifier key settings.
-      
-      
-      B_MODIFIERS_CHANGED 
-Source: The system. 
-Target: The focus view's window. 
-Sent when the user presses or releases a modifier key. 
-
-Field
-Type code
-Description
-"when"
-B_INT64_TYPE
-Event time, in microseconds since 01/01/70
-"modifiers"
-B_INT32_TYPE
-The current modifier keys. See <x>
-"be:old_modifiers"
-B_INT32_TYPE
-The previous modifier keys.
-"states"
-B_UINT8_TYPE
-T
-
-
-    BMessage: what = _MCH (0x5f4d4348, or 1598899016)
-    entry           when, type='LLNG', c=1, size= 8, data[0]: 0x1546cc47a (5711381626, '')
-    entry      modifiers, type='LONG', c=1, size= 4, data[0]: 0x20 (32, '')
-    entry be:old_modifiers, type='LONG', c=1, size= 4, data[0]: 0x422 (1058, '')
-    entry         states, type='UBYT', c=1, size=16,   
-        EventMessage.what = B_MODIFIERS_CHANGED;
-        EventMessage.AddInt64 ("when", system_time ());
-        EventMessage.AddInt32 ("modifiers", 0);
-        EventMessage.AddData ("states", B_UINT8_TYPE, KeyAsString, 16);
-      
-    }
-    
-    if (ChangedModifiers != B_SCROLL_LOCK)
-      return; // No actual typeable key was pressed, nothing further to do.
-  }
-
-
-  // Type the selected key.
-  switch (key)
-  {
-  }
-  // Tell the system to use the new modifier settings.
-  // Tell the system to type the keys for the letter, if any.
+  vlog.debug ("setServer called.");
+  m_ServerPntr = ServerPntr;
 }
 
 
-static inline void SetKeyState (
-  key_info &KeyState,
-  uint8 KeyCode,
-  uint32 KeyIsDown)
+void SDesktopBeOS::start (rfb::VNCServer* vs)
 {
-  uint8 BitMask;
-  uint8 Index;
+  vlog.debug ("start called.");
 
-  if (KeyCode <= 0 || KeyCode >= 128)
-    return; // Keycodes are from 1 to 127, zero means no key defined.
+  if (m_FrameBufferBeOSPntr == NULL)
+    m_FrameBufferBeOSPntr = new FrameBufferBeOS;
+  m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
 
-  Index = KeyCode / 8;
-  BitMask = (1 << (7 - (KeyCode & 7)));
-  if (KeyIsDown)
-    KeyState.key_states[Index] |= BitMask;
-  else
-    KeyState.key_states[Index] &= ~BitMask;
+  if (m_InputDeviceKeyboardPntr == NULL)
+    m_InputDeviceKeyboardPntr = find_input_device ("VNC Fake Keyboard");
+  if (m_InputDeviceMousePntr == NULL)
+    m_InputDeviceMousePntr = find_input_device ("VNC Fake Mouse");
+
+  if (m_KeyMapPntr != NULL || m_KeyCharStrings != NULL)
+    throw rfb::Exception ("SDesktopBeOS::start: key map pointers not "
+    "NULL, bug!");
+  get_key_map (&m_KeyMapPntr, &m_KeyCharStrings);
+  if (m_KeyMapPntr == NULL || m_KeyCharStrings == NULL)
+    throw rfb::Exception ("SDesktopBeOS::start: get_key_map has failed, "
+    "so we can't simulate the keyboard buttons being pressed!");
+}
+
+
+void SDesktopBeOS::stop ()
+{
+  vlog.debug ("stop called.");
+
+  free (m_KeyCharStrings);
+  m_KeyCharStrings = NULL;
+  free (m_KeyMapPntr);
+  m_KeyMapPntr = NULL;
+
+  delete m_FrameBufferBeOSPntr;
+  m_FrameBufferBeOSPntr = NULL;
+  m_ServerPntr->setPixelBuffer (NULL);
+
+  delete m_InputDeviceKeyboardPntr;
+  m_InputDeviceKeyboardPntr = NULL;
+  delete m_InputDeviceMousePntr;
+  m_InputDeviceMousePntr = NULL;
 }
 
 
