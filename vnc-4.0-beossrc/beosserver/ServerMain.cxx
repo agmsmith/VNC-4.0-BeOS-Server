@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.2 2004/01/11 00:55:42 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.3 2004/01/25 02:57:42 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,13 +22,16 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.3  2004/01/25 02:57:42  agmsmith
+ * Removed loading and saving of settings, just specify the command line
+ * options every time it is activated.
+ *
  * Revision 1.2  2004/01/11 00:55:42  agmsmith
  * Added network initialisation and basic server code.  Now accepts incoming
  * connections!  But doesn't display a black remote screen yet.
  *
  * Revision 1.1  2004/01/03 02:32:55  agmsmith
  * Initial revision
- *
  */
 
 /* Posix headers. */
@@ -39,6 +42,7 @@
 /* VNC library headers. */
 
 #include <network/TcpSocket.h>
+#include <rfb/FrameBuffer.h>
 #include <rfb/Logger_stdio.h>
 #include <rfb/LogWriter.h>
 #include <rfb/SDesktop.h>
@@ -49,10 +53,10 @@
 
 #include <Alert.h>
 #include <Application.h>
-#include <Directory.h>
-#include <File.h>
-#include <FindDirectory.h>
-#include <Path.h>
+
+/* Our source code */
+
+#include "FrameBufferBeOS.h"
 
 
 
@@ -66,7 +70,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.2 2004/01/11 00:55:42 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.3 2004/01/25 02:57:42 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -111,10 +115,6 @@ public: /* Member variables. */
   rfb::SStaticDesktop *m_FakeDesktopPntr;
     /* Provides access to the frame buffer, mouse, etc for VNC to use. */
 
-  BPath m_SettingsDirectoryPath;
-    /* The constructor initialises this to the settings directory path.  It
-    never changes after that. */
-
   network::TcpListener *m_TcpListenerPntr;
     /* A socket that listens for incoming connections. */
 
@@ -151,6 +151,8 @@ ServerApp::~ServerApp ()
 void ServerApp::AboutRequested ()
 {
   BAlert *AboutAlertPntr;
+
+  FrameBufferBeOS Bleeble;
 
   AboutAlertPntr = new BAlert ("About", g_AboutText, "Done");
   if (AboutAlertPntr != NULL)
@@ -286,7 +288,7 @@ int main (int argc, char** argv)
 
   try {
     rfb::initStdIOLoggers();
-    rfb::LogWriter::setLogParams("*:stderr:30");
+    rfb::LogWriter::setLogParams("*:stderr:1000"); // Normal level is 30.
 
     // Override the default parameters with new values from the command line.
     // Display the usage message and exit the program if an unknown parameter
