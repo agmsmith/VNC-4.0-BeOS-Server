@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.15 2005/01/03 00:19:50 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.16 2005/02/06 23:39:14 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.16  2005/02/06 23:39:14  agmsmith
+ * Bumpped version number.
+ *
  * Revision 1.15  2005/01/03 00:19:50  agmsmith
  * Based on more recent source than 4.0 Beta 4, update
  * comments to show that it's the final 4.0 VNC source.
@@ -97,6 +100,7 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Clipboard.h>
 #include <DirectWindow.h>
 #include <Locker.h>
 
@@ -122,7 +126,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.15 2005/01/03 00:19:50 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.16 2005/02/06 23:39:14 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -230,6 +234,25 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
 {
   if (MessagePntr->what == MSG_DO_POLLING_STEP)
     PollNetwork ();
+  else if (MessagePntr->what == B_CLIPBOARD_CHANGED)
+  {
+    BMessage   *ClipMsgPntr;
+    int32       TextLength;
+    const char *TextPntr;
+
+    if (m_VNCServerPntr != NULL && be_clipboard->Lock())
+    {
+      if ((ClipMsgPntr = be_clipboard->Data ()) != NULL)
+      {
+        TextPntr = NULL;
+        ClipMsgPntr->FindData ("text/plain", B_MIME_TYPE,
+          (const void **) &TextPntr, &TextLength);
+        if (TextPntr != NULL)
+          m_VNCServerPntr->serverCutText (TextPntr, TextLength);
+      }
+      be_clipboard->Unlock ();
+    }
+  }
   else
     /* Pass the unprocessed message to the inherited function, maybe it knows
     what to do.  This includes replies to messages we sent ourselves. */
@@ -311,6 +334,7 @@ void ServerApp::Pulse ()
 
 bool ServerApp::QuitRequested ()
 {
+  be_clipboard->StopWatching (be_app_messenger);
   return BApplication::QuitRequested ();
 }
 
@@ -331,6 +355,8 @@ void ServerApp::ReadyToRun ()
     network::TcpSocket::initTcpSockets();
     m_TcpListenerPntr = new network::TcpListener ((int)port_number);
     vlog.info("Listening on port %d", (int)port_number);
+
+    be_clipboard->StartWatching (be_app_messenger);
 
     SetPulseRate (3000000); // Deadman timer checks every 3 seconds.
   }
