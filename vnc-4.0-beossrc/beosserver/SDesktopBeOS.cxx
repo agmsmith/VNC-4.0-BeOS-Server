@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.10 2004/08/23 00:51:59 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.11 2004/09/13 00:18:27 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.11  2004/09/13 00:18:27  agmsmith
+ * Do updates separately, only based on the timer running out,
+ * so that other events all get processed first before the slow
+ * screen update starts.
+ *
  * Revision 1.10  2004/08/23 00:51:59  agmsmith
  * Force an update shortly after a key press.
  *
@@ -130,37 +135,6 @@ extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
 static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
 { // Note that this table is in increasing order of VNC key code,
   // so that a binary search can be done.
-  {0x01, "\0x01"},
-  {0x02, "\0x02"},
-  {0x03, "\0x03"},
-  {0x04, "\0x04"},
-  {0x05, "\0x05"},
-  {0x06, "\0x06"},
-  {0x07, "\0x07"},
-  {0x08, "\0x08"},
-  {0x09, "\0x09"},
-  {0x0a, "\0x0a"},
-  {0x0b, "\0x0b"},
-  {0x0c, "\0x0c"},
-  {0x0d, "\0x0d"},
-  {0x0e, "\0x0e"},
-  {0x0f, "\0x0f"},
-  {0x10, "\0x10"},
-  {0x11, "\0x11"},
-  {0x12, "\0x12"},
-  {0x13, "\0x13"},
-  {0x14, "\0x14"},
-  {0x15, "\0x15"},
-  {0x16, "\0x16"},
-  {0x17, "\0x17"},
-  {0x18, "\0x18"},
-  {0x19, "\0x19"},
-  {0x1a, "\0x1a"},
-  {0x1b, "\0x1b"},
-  {0x1c, "\0x1c"},
-  {0x1d, "\0x1d"},
-  {0x1e, "\0x1e"},
-  {0x1f, "\0x1f"},
   {/* 0x0020 */ XK_space, " "},
   {/* 0x0021 */ XK_exclam, "!"},
   {/* 0x0022 */ XK_quotedbl, "\""},
@@ -436,7 +410,6 @@ void SDesktopBeOS::DoScreenUpdate ()
 {
   rfb::PixelFormat NewScreenFormat;
   rfb::PixelFormat OldScreenFormat;
-  rfb::Rect        RectangleChanged;
   char             TempString [80];
   static int       UpdateCounter = 0;
 
@@ -455,11 +428,14 @@ void SDesktopBeOS::DoScreenUpdate ()
       if (!NewScreenFormat.equal(OldScreenFormat))
         m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
 
-      // Tell the server to resend the changed areas.
+      // Tell the server to resend the changed areas, by telling it to examine
+      // everything except the corner of the screen with the changing number.
 
-      RectangleChanged.setXYWH (0, 0,
+      rfb::Rect RectangleChanged (0, 0,
         m_FrameBufferBeOSPntr->width (), m_FrameBufferBeOSPntr->height ());
-      m_ServerPntr->add_changed (rfb::Region (RectangleChanged));
+      rfb::Region RegionChanged (RectangleChanged);
+      m_ServerPntr->add_changed (RegionChanged);
+      m_ServerPntr->tryUpdate ();
     }
     catch (...)
     {
@@ -471,7 +447,8 @@ void SDesktopBeOS::DoScreenUpdate ()
     UpdateCounter++;
     sprintf (TempString, "Update #%d", UpdateCounter);
     m_FrameBufferBeOSPntr->SetDisplayMessage (TempString);
-    m_NextForcedUpdateTime = system_time () + 10000000;
+
+    m_NextForcedUpdateTime = system_time () + 20000000;
   }
 }
 
@@ -508,7 +485,7 @@ void SDesktopBeOS::forcedUpdateCheck ()
 
 void SDesktopBeOS::framebufferUpdateRequest ()
 {
-  m_NextForcedUpdateTime = system_time () + 300000;
+  m_NextForcedUpdateTime = system_time () + 1000000;
 }
 
 
@@ -532,6 +509,7 @@ rfb::Point SDesktopBeOS::getFbSize ()
 void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 {
   uint32              ChangedModifiers;
+  char                ControlCharacterAsUTF8 [2];
   BMessage            EventMessage;
   uint8               KeyCode;
   char                KeyAsString [16];
@@ -639,17 +617,36 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     return;
   }
 
-  // The rest of the keys have an equivalent UTF-8 character.  Convert the key
-  // code into a UTF-8 character, which will later be used to determine which
-  // keys to press.
+  // Special case for control keys.  If control is down (but Command isn't,
+  // since if Command is down then control is ignored by BeOS) then convert the
+  // VNC keycodes into control characters.  That's because VNC sends control-A
+  // as the same code for the letter A.
 
-  KeyToUTF8SearchData.vncKeyCode = key;
-  KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
-    &KeyToUTF8SearchData,
-    VNCKeyToUTF8Array,
-    sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
-    sizeof (VNCKeyToUTF8Record),
-    CompareVNCKeyRecords);
+  KeyToUTF8Pntr = NULL;
+  if ((m_LastKeyState.modifiers & B_COMMAND_KEY) == 0 &&
+  (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0 &&
+  key >= 0x40 /* @ sign */ && key <= 0x7f /* Del key */)
+  {
+    KeyToUTF8SearchData.vncKeyCode = key;
+    ControlCharacterAsUTF8 [0] = (key & 31);
+    ControlCharacterAsUTF8 [1] = 0;
+    KeyToUTF8SearchData.utf8String = ControlCharacterAsUTF8;
+    KeyToUTF8Pntr = &KeyToUTF8SearchData;
+  }
+  else
+  {
+    // The rest of the keys have an equivalent UTF-8 character.  Convert the
+    // key code into a UTF-8 character, which will later be used to determine
+    // which keys to press.
+  
+    KeyToUTF8SearchData.vncKeyCode = key;
+    KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
+      &KeyToUTF8SearchData,
+      VNCKeyToUTF8Array,
+      sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
+      sizeof (VNCKeyToUTF8Record),
+      CompareVNCKeyRecords);
+  }
   if (KeyToUTF8Pntr == NULL)
   {
     vlog.info ("VNC keycode $%04X (%s) isn't recognised, ignoring it.",
@@ -712,7 +709,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     EventMessage.AddString ("bytes", KeyAsString);
     EventMessage.AddData ("states", B_UINT8_TYPE,
       m_LastKeyState.key_states, 16);
-    EventMessage.AddInt32 ("raw_char", KeyAsString [0]); // Could be wrong.
+    EventMessage.AddInt32 ("raw_char", key & 0xFF); // Could be wrong.
     m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
     EventMessage.MakeEmpty ();
     return;
