@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.7 2004/07/05 00:53:07 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.8 2004/07/19 22:30:19 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.8  2004/07/19 22:30:19  agmsmith
+ * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
+ *
  * Revision 1.7  2004/07/05 00:53:07  agmsmith
  * Check for a forced update too.
  *
@@ -84,7 +87,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.7 2004/07/05 00:53:07 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.8 2004/07/19 22:30:19 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -190,8 +193,6 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
 
 void ServerApp::Pulse ()
 {
-  static bigtime_t TimeOfLastUpdateCheck = 0;
-
   if (m_VNCServerPntr == NULL)
     return;
 
@@ -229,20 +230,8 @@ void ServerApp::Pulse ()
 
     m_VNCServerPntr->checkTimeouts();
 
-    // Try copying data from the frame buffer to the clients, if any need it.
-    // Do this only when we've been idle for a while (1/10 second), otherwise
-    // the Pulse event queue will fill up with pending pulses.
-
-    ElapsedTime = system_time () - TimeOfLastUpdateCheck;
-    if (ElapsedTime > 90000 /* microsecs */)
-    {
-      if (m_VNCServerPntr->clientsReadyForUpdate ())
-      {
-        m_FakeDesktopPntr->forcedUpdateCheck ();
-        m_VNCServerPntr->tryUpdate ();
-        TimeOfLastUpdateCheck = system_time ();
-      }
-    }
+    if (m_VNCServerPntr->clientsReadyForUpdate ())
+      m_FakeDesktopPntr->forcedUpdateCheck ();
   }
   catch (rdr::Exception &e)
   {
