@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.6 2004/08/02 15:54:24 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.7 2004/08/02 22:00:35 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.7  2004/08/02 22:00:35  agmsmith
+ * Got nonprinting keys working, next up is UTF-8 generating keys.
+ *
  * Revision 1.6  2004/08/02 15:54:24  agmsmith
  * Rearranged methods to be in alphabetical order, still under construction.
  *
@@ -97,8 +100,7 @@ static char UTF8_PageDown [] = {B_PAGE_DOWN, 0};
 
 // This table is used for converting VNC key codes into UTF-8 characters, but
 // only for the normal printable characters.  Function keys and modifier keys
-// (like shift) are handled separately.  Note that the table is in increasing
-// order of VNC key code, so that a binary search can be done.
+// (like shift) are handled separately.
 
 typedef struct VNCKeyToUTF8Struct
 {
@@ -111,13 +113,204 @@ extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
   int Result;
 
   Result = ((VNCKeyToUTF8Pointer) APntr)->vncKeyCode;
-  Result -= ((VNCKeyToUTF8Pointer) BPntr)->vncKeyCode;;
+  Result -= ((VNCKeyToUTF8Pointer) BPntr)->vncKeyCode;
   return Result;
 }
 
 static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
-{
+{ // Note that this table is in increasing order of VNC key code,
+  // so that a binary search can be done.
   {/* 0x0020 */ XK_space, " "},
+  {/* 0x0021 */ XK_exclam, "!"},
+  {/* 0x0022 */ XK_quotedbl, "\""},
+  {/* 0x0023 */ XK_numbersign, "#"},
+  {/* 0x0024 */ XK_dollar, "$"},
+  {/* 0x0025 */ XK_percent, "%"},
+  {/* 0x0026 */ XK_ampersand, "&"},
+  {/* 0x0027 */ XK_apostrophe, "'"},
+  {/* 0x0028 */ XK_parenleft, "("},
+  {/* 0x0029 */ XK_parenright, ")"},
+  {/* 0x002a */ XK_asterisk, "*"},
+  {/* 0x002b */ XK_plus, "+"},
+  {/* 0x002c */ XK_comma, ","},
+  {/* 0x002d */ XK_minus, "-"},
+  {/* 0x002e */ XK_period, "."},
+  {/* 0x002f */ XK_slash, "/"},
+  {/* 0x0030 */ XK_0, "0"},
+  {/* 0x0031 */ XK_1, "1"},
+  {/* 0x0032 */ XK_2, "2"},
+  {/* 0x0033 */ XK_3, "3"},
+  {/* 0x0034 */ XK_4, "4"},
+  {/* 0x0035 */ XK_5, "5"},
+  {/* 0x0036 */ XK_6, "6"},
+  {/* 0x0037 */ XK_7, "7"},
+  {/* 0x0038 */ XK_8, "8"},
+  {/* 0x0039 */ XK_9, "9"},
+  {/* 0x003a */ XK_colon, ":"},
+  {/* 0x003b */ XK_semicolon, ";"},
+  {/* 0x003c */ XK_less, "<"},
+  {/* 0x003d */ XK_equal, "="},
+  {/* 0x003e */ XK_greater, ">"},
+  {/* 0x003f */ XK_question, "?"},
+  {/* 0x0040 */ XK_at, "@"},
+  {/* 0x0041 */ XK_A, "A"},
+  {/* 0x0042 */ XK_B, "B"},
+  {/* 0x0043 */ XK_C, "C"},
+  {/* 0x0044 */ XK_D, "D"},
+  {/* 0x0045 */ XK_E, "E"},
+  {/* 0x0046 */ XK_F, "F"},
+  {/* 0x0047 */ XK_G, "G"},
+  {/* 0x0048 */ XK_H, "H"},
+  {/* 0x0049 */ XK_I, "I"},
+  {/* 0x004a */ XK_J, "J"},
+  {/* 0x004b */ XK_K, "K"},
+  {/* 0x004c */ XK_L, "L"},
+  {/* 0x004d */ XK_M, "M"},
+  {/* 0x004e */ XK_N, "N"},
+  {/* 0x004f */ XK_O, "O"},
+  {/* 0x0050 */ XK_P, "P"},
+  {/* 0x0051 */ XK_Q, "Q"},
+  {/* 0x0052 */ XK_R, "R"},
+  {/* 0x0053 */ XK_S, "S"},
+  {/* 0x0054 */ XK_T, "T"},
+  {/* 0x0055 */ XK_U, "U"},
+  {/* 0x0056 */ XK_V, "V"},
+  {/* 0x0057 */ XK_W, "W"},
+  {/* 0x0058 */ XK_X, "X"},
+  {/* 0x0059 */ XK_Y, "Y"},
+  {/* 0x005a */ XK_Z, "Z"},
+  {/* 0x005b */ XK_bracketleft, "["},
+  {/* 0x005c */ XK_backslash, "\\"},
+  {/* 0x005d */ XK_bracketright, "]"},
+  {/* 0x005e */ XK_asciicircum, "^"},
+  {/* 0x005f */ XK_underscore, "_"},
+  {/* 0x0060 */ XK_grave, "`"},
+  {/* 0x0061 */ XK_a, "a"},
+  {/* 0x0062 */ XK_b, "b"},
+  {/* 0x0063 */ XK_c, "c"},
+  {/* 0x0064 */ XK_d, "d"},
+  {/* 0x0065 */ XK_e, "e"},
+  {/* 0x0066 */ XK_f, "f"},
+  {/* 0x0067 */ XK_g, "g"},
+  {/* 0x0068 */ XK_h, "h"},
+  {/* 0x0069 */ XK_i, "i"},
+  {/* 0x006a */ XK_j, "j"},
+  {/* 0x006b */ XK_k, "k"},
+  {/* 0x006c */ XK_l, "l"},
+  {/* 0x006d */ XK_m, "m"},
+  {/* 0x006e */ XK_n, "n"},
+  {/* 0x006f */ XK_o, "o"},
+  {/* 0x0070 */ XK_p, "p"},
+  {/* 0x0071 */ XK_q, "q"},
+  {/* 0x0072 */ XK_r, "r"},
+  {/* 0x0073 */ XK_s, "s"},
+  {/* 0x0074 */ XK_t, "t"},
+  {/* 0x0075 */ XK_u, "u"},
+  {/* 0x0076 */ XK_v, "v"},
+  {/* 0x0077 */ XK_w, "w"},
+  {/* 0x0078 */ XK_x, "x"},
+  {/* 0x0079 */ XK_y, "y"},
+  {/* 0x007a */ XK_z, "z"},
+  {/* 0x007b */ XK_braceleft, "{"},
+  {/* 0x007c */ XK_bar, "|"},
+  {/* 0x007d */ XK_braceright, "}"},
+  {/* 0x007e */ XK_asciitilde, "~"},
+  {/* 0x00a0 */ XK_nobreakspace, " "}, // If compiler barfs use: "\0xc2\0xa0"
+  {/* 0x00a1 */ XK_exclamdown, "¡"},
+  {/* 0x00a2 */ XK_cent, "¢"},
+  {/* 0x00a3 */ XK_sterling, "£"},
+  {/* 0x00a4 */ XK_currency, "¤"},
+  {/* 0x00a5 */ XK_yen, "¥"},
+  {/* 0x00a6 */ XK_brokenbar, "¦"},
+  {/* 0x00a7 */ XK_section, "§"},
+  {/* 0x00a8 */ XK_diaeresis, "¨"},
+  {/* 0x00a9 */ XK_copyright, "©"},
+  {/* 0x00aa */ XK_ordfeminine, "ª"},
+  {/* 0x00ab */ XK_guillemotleft, "«"},
+  {/* 0x00ac */ XK_notsign, "¬"},
+  {/* 0x00ad */ XK_hyphen, "­"},
+  {/* 0x00ae */ XK_registered, "®"},
+  {/* 0x00af */ XK_macron, "¯"},
+  {/* 0x00b0 */ XK_degree, "°"},
+  {/* 0x00b1 */ XK_plusminus, "±"},
+  {/* 0x00b2 */ XK_twosuperior, "²"},
+  {/* 0x00b3 */ XK_threesuperior, "³"},
+  {/* 0x00b4 */ XK_acute, "´"},
+  {/* 0x00b5 */ XK_mu, "µ"},
+  {/* 0x00b6 */ XK_paragraph, "¶"},
+  {/* 0x00b7 */ XK_periodcentered, "·"},
+  {/* 0x00b8 */ XK_cedilla, "¸"},
+  {/* 0x00b9 */ XK_onesuperior, "¹"},
+  {/* 0x00ba */ XK_masculine, "º"},
+  {/* 0x00bb */ XK_guillemotright, "»"},
+  {/* 0x00bc */ XK_onequarter, "¼"},
+  {/* 0x00bd */ XK_onehalf, "½"},
+  {/* 0x00be */ XK_threequarters, "¾"},
+  {/* 0x00bf */ XK_questiondown, "¿"},
+  {/* 0x00c0 */ XK_Agrave, "À"},
+  {/* 0x00c1 */ XK_Aacute, "Á"},
+  {/* 0x00c2 */ XK_Acircumflex, "Â"},
+  {/* 0x00c3 */ XK_Atilde, "Ã"},
+  {/* 0x00c4 */ XK_Adiaeresis, "Ä"},
+  {/* 0x00c5 */ XK_Aring, "Å"},
+  {/* 0x00c6 */ XK_AE, "Æ"},
+  {/* 0x00c7 */ XK_Ccedilla, "Ç"},
+  {/* 0x00c8 */ XK_Egrave, "È"},
+  {/* 0x00c9 */ XK_Eacute, "É"},
+  {/* 0x00ca */ XK_Ecircumflex, "Ê"},
+  {/* 0x00cb */ XK_Ediaeresis, "Ë"},
+  {/* 0x00cc */ XK_Igrave, "Ì"},
+  {/* 0x00cd */ XK_Iacute, "Í"},
+  {/* 0x00ce */ XK_Icircumflex, "Î"},
+  {/* 0x00cf */ XK_Idiaeresis, "Ï"},
+  {/* 0x00d0 */ XK_ETH, "Ð"},
+  {/* 0x00d1 */ XK_Ntilde, "Ñ"},
+  {/* 0x00d2 */ XK_Ograve, "Ò"},
+  {/* 0x00d3 */ XK_Oacute, "Ó"},
+  {/* 0x00d4 */ XK_Ocircumflex, "Ô"},
+  {/* 0x00d5 */ XK_Otilde, "Õ"},
+  {/* 0x00d6 */ XK_Odiaeresis, "Ö"},
+  {/* 0x00d7 */ XK_multiply, "×"},
+  {/* 0x00d8 */ XK_Ooblique, "Ø"},
+  {/* 0x00d9 */ XK_Ugrave, "Ù"},
+  {/* 0x00da */ XK_Uacute, "Ú"},
+  {/* 0x00db */ XK_Ucircumflex, "Û"},
+  {/* 0x00dc */ XK_Udiaeresis, "Ü"},
+  {/* 0x00dd */ XK_Yacute, "Ý"},
+  {/* 0x00de */ XK_THORN, "Þ"},
+  {/* 0x00df */ XK_ssharp, "ß"},
+  {/* 0x00e0 */ XK_agrave, "à"},
+  {/* 0x00e1 */ XK_aacute, "á"},
+  {/* 0x00e2 */ XK_acircumflex, "â"},
+  {/* 0x00e3 */ XK_atilde, "ã"},
+  {/* 0x00e4 */ XK_adiaeresis, "ä"},
+  {/* 0x00e5 */ XK_aring, "å"},
+  {/* 0x00e6 */ XK_ae, "æ"},
+  {/* 0x00e7 */ XK_ccedilla, "ç"},
+  {/* 0x00e8 */ XK_egrave, "è"},
+  {/* 0x00e9 */ XK_eacute, "é"},
+  {/* 0x00ea */ XK_ecircumflex, "ê"},
+  {/* 0x00eb */ XK_ediaeresis, "ë"},
+  {/* 0x00ec */ XK_igrave, "ì"},
+  {/* 0x00ed */ XK_iacute, "í"},
+  {/* 0x00ee */ XK_icircumflex, "î"},
+  {/* 0x00ef */ XK_idiaeresis, "ï"},
+  {/* 0x00f0 */ XK_eth, "ð"},
+  {/* 0x00f1 */ XK_ntilde, "ñ"},
+  {/* 0x00f2 */ XK_ograve, "ò"},
+  {/* 0x00f3 */ XK_oacute, "ó"},
+  {/* 0x00f4 */ XK_ocircumflex, "ô"},
+  {/* 0x00f5 */ XK_otilde, "õ"},
+  {/* 0x00f6 */ XK_odiaeresis, "ö"},
+  {/* 0x00f7 */ XK_division, "÷"},
+  {/* 0x00f8 */ XK_oslash, "ø"},
+  {/* 0x00f9 */ XK_ugrave, "ù"},
+  {/* 0x00fa */ XK_uacute, "ú"},
+  {/* 0x00fb */ XK_ucircumflex, "û"},
+  {/* 0x00fc */ XK_udiaeresis, "ü"},
+  {/* 0x00fd */ XK_yacute, "ý"},
+  {/* 0x00fe */ XK_thorn, "þ"},
+  {/* 0x00ff */ XK_ydiaeresis, "ÿ"},
   {/* 0xFF08 */ XK_BackSpace, UTF8_Backspace},
   {/* 0xFF09 */ XK_Tab, UTF8_Tab},
   {/* 0xFF0D */ XK_Return, UTF8_Return},
@@ -131,7 +324,7 @@ static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
   {/* 0xFF56 */ XK_Page_Down, UTF8_PageDown},
   {/* 0xFF57 */ XK_End, UTF8_End},
   {/* 0xFF63 */ XK_Insert, UTF8_Insert},
-  {/* 0xFFFF */ XK_Delete, UTF8_Delete},
+  {/* 0xFFFF */ XK_Delete, UTF8_Delete}
 };
 
 
@@ -321,7 +514,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     {
       // Send a B_MODIFIERS_CHANGED message to update the system with the new
       // modifier key settings.  Note that this gets sent before the unmapped
-      // key message.
+      // key message since that's what BeOS does.
 
       EventMessage.what = B_MODIFIERS_CHANGED;
       EventMessage.AddInt64 ("when", system_time ());
@@ -347,7 +540,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   if (key >= XK_F1 && key <= XK_F12)
     KeyCode = B_F1_KEY + key - XK_F1;
   else if (key == XK_Scroll_Lock)
-    KeyCode = B_SCROLL_KEY;
+    KeyCode = m_KeyMapPntr->scroll_key; // Usually equals B_SCROLL_KEY.
   else if (key == XK_Print)
     KeyCode = B_PRINT_KEY;
   else if (key == XK_Pause)
@@ -378,16 +571,22 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   // keys to press.
 
   KeyToUTF8SearchData.vncKeyCode = key;
-  KeyToUTF8Pntr = bsearch (
-    (const void *) &KeyToUTF8SearchData,
-    (const void *) VNCKeyToUTF8Array,
-    sizeof (VNCKeyToUTF8Record),
+  KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
+    &KeyToUTF8SearchData,
+    VNCKeyToUTF8Array,
     sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
+    sizeof (VNCKeyToUTF8Record),
     CompareVNCKeyRecords);
   if (KeyToUTF8Pntr == NULL)
+  {
+    printf ("Bleeble - VNC key $%04X not in our table of key to UTF-8 strings.\n",
+      key);
     return; // Key not handled, ignore it.
+  }
 
-  bleeble;
+printf ("Bleeble - VNC key $%04X goes to string \"%s\" (length %ld bytes).\n",
+key, KeyToUTF8Pntr->utf8String, strlen (KeyToUTF8Pntr->utf8String));
+//  bleeble;
 }
 
 
@@ -461,7 +660,7 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   // notch, button 5 is wheel down).  These get sent as a separate
   // B_MOUSE_WHEEL_CHANGED message.  We do it on the release.
 
-  NewMouseButtons = (buttonmask & 0x18); // Don't include mouse wheel etc.
+  NewMouseButtons = (buttonmask & 0x18); // Just examine mouse wheel "buttons".
   OldMouseButtons = (m_LastMouseButtonState & 0x18);
   EventMessage.what = 0; // Means no event decided on yet.
 
