@@ -131,8 +131,7 @@ TcpSocket::TcpSocket(const char *host, int port)
   if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
 		 (char *)&one, sizeof(one)) < 0) {
     int e = errorNumber;
-    closesocket(sock);
-    throw SocketException("unable to setsockopt TCP_NODELAY", e);
+    vlog.error ("in TcpListener::TcpSocket unable to setsockopt TCP_NODELAY, error code %d, continuing on anyway.", e);
   }
 
   // Create the input and output streams
@@ -320,8 +319,7 @@ TcpListener::accept() {
   if (setsockopt(new_sock, IPPROTO_TCP, TCP_NODELAY,
    (char *)&one, sizeof(one)) < 0) {
     int e = errorNumber;
-    closesocket(new_sock);
-    throw SocketException("unable to setsockopt TCP_NODELAY", e);
+    vlog.error ("in TcpListener::accept unable to setsockopt TCP_NODELAY, error code %d, continuing on anyway.", e);
   }
 
   // Create the socket object & check connection is allowed
