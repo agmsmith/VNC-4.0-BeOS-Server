@@ -25,6 +25,18 @@
 #endif
 #define errorNumber WSAGetLastError()
 #define snprintf _snprintf
+#elif defined (__BEOS__)
+#define errorNumber errno
+#undef closesocket // closesocket is closesocket in BeOS.
+#ifndef TCP_NODELAY
+#define TCP_NODELAY 1
+#endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #else
 #define errorNumber errno
 #define closesocket close
@@ -66,6 +78,7 @@ TcpSocket::initTcpSockets() {
   
   if (WSAStartup(requiredVersion, &initResult) != 0)
     throw SocketException("unable to initialise Winsock2", errorNumber);
+#elif defined (__BEOS__)
 #else
   signal(SIGPIPE, SIG_IGN);
 #endif
