@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.18 2005/01/01 20:46:47 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.19 2005/01/01 21:31:02 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.19  2005/01/01 21:31:02  agmsmith
+ * Added double click timing detection, so that you can now double
+ * click on a window title to minimize it.  Was missing the "clicks"
+ * field in mouse down BMessages.
+ *
  * Revision 1.18  2005/01/01 20:46:47  agmsmith
  * Make the default control/alt key swap detection be the alt is alt
  * and control is control setting, in case the keyboard isn't a
@@ -418,10 +423,16 @@ SDesktopBeOS::SDesktopBeOS () :
   m_LastMouseDownTime (0),
   m_LastMouseX (-1.0F),
   m_LastMouseY (-1.0F),
-  m_ServerPntr (NULL)
+  m_ServerPntr (NULL),
+  m_TemporaryBitmap (rfb::PixelFormat(), 256, 32),
+  m_UpdateCount (0),
+  m_UpdateMode (UPDATE_NORMAL)
 {
   get_click_speed (&m_DoubleClickTimeLimit);
   memset (&m_LastKeyState, 0, sizeof (m_LastKeyState));
+  m_TemporaryBitmap.fillRect (
+    rfb::Rect (0, 0, m_TemporaryBitmap.width(), m_TemporaryBitmap.height()),
+    12345 /* a brownish colour in 8 bit RGB */);
 }
 
 
@@ -481,53 +492,100 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
       "pointer, ignoring our lock.");
 
     NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-    if (!NewScreenFormat.equal(OldScreenFormat))
-      m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
 
-    if (m_BackgroundNextScanLineY < 0 || m_BackgroundNextScanLineY >= Height)
+    if (!NewScreenFormat.equal(OldScreenFormat) ||
+    Width != m_FrameBufferBeOSPntr->width () ||
+    Height != m_FrameBufferBeOSPntr->height ())
     {
-      // Time to start a new frame.  Update the number of scan lines to process
-      // based on the performance in the previous frame.  Less scan lines if
-      // the number of updates per second is too small, larger slower updates
-      // if they are too fast.
+      // The screen size or resolution has changed.  Since VNC is kind of dumb
+      // at noticing a change, force it to a temporary totally different
+      // resolution and size, then change it to the new size later.
 
-      NumberOfUpdates = (Height + m_BackgroundNumberOfScanLinesPerUpdate - 1) /
-        m_BackgroundNumberOfScanLinesPerUpdate; // Will be at least 1.
-      ElapsedTime = system_time () - m_BackgroundUpdateStartTime;
-      if (ElapsedTime <= 0)
-        ElapsedTime = 1;
-      UpdatesPerSecond = NumberOfUpdates / (ElapsedTime / 1000000.0F);
-      OldUpdateSize = m_BackgroundNumberOfScanLinesPerUpdate;
-      if (UpdatesPerSecond < 20)
-        m_BackgroundNumberOfScanLinesPerUpdate--;
-      else if (UpdatesPerSecond > 25)
-        m_BackgroundNumberOfScanLinesPerUpdate++;
-
-      if (m_BackgroundNumberOfScanLinesPerUpdate <= 4) // Only go as small as 4
-        m_BackgroundNumberOfScanLinesPerUpdate = 4; // for performance reasons.
-      else if (m_BackgroundNumberOfScanLinesPerUpdate > Height)
-        m_BackgroundNumberOfScanLinesPerUpdate = Height;
-
-      m_BackgroundNextScanLineY = 0;
-      m_BackgroundUpdateStartTime = system_time ();
+      m_ServerPntr->setPixelBuffer (&m_TemporaryBitmap);
+      m_UpdateMode = UPDATE_SHOWING_TEMPORARY;
+      m_UpdateCount = 0;
     }
+    else if (m_UpdateMode == UPDATE_SHOWING_TEMPORARY)
+    {
+      // While we're waiting for things to settle down, display a rectangle
+      // that's changing from black to yellow as time goes on.  Then
+      // gradually switch to the new screen.
 
-    // Mark the current work unit of scan lines as needing an update.
+      if (m_UpdateCount == 8)
+      {
+        // Safe to switch back to normal - resolution hasn't changed recently.
+        // This will trigger a full screen update too, which takes a while.
+        m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
+      }
+      else if (m_UpdateCount == 9)
+        m_ServerPntr->tryUpdate ();
+      else if (m_UpdateCount >= 10)
+      {
+        m_BackgroundNextScanLineY = -1; // Start background updates over again.
+        m_UpdateMode = UPDATE_NORMAL;
+      }
+      else
+      {
+      	// Draw a colourful rectangle.
+        RectangleToUpdate.setXYWH (0, 0,
+          m_TemporaryBitmap.width(), m_TemporaryBitmap.height());
+        m_TemporaryBitmap.fillRect (RectangleToUpdate,
+          m_UpdateCount * (1 + 8));
+        rfb::Region RegionChanged (RectangleToUpdate);
+        m_ServerPntr->add_changed (RegionChanged);
+        m_ServerPntr->tryUpdate ();
+      }
+      m_UpdateCount++;
+      snooze (100000);
+    }
+    else // No screen change, try an update.
+    {
+      if (m_BackgroundNextScanLineY < 0 || m_BackgroundNextScanLineY >= Height)
+      {
+        // Time to start a new frame.  Update the number of scan lines to
+        // process based on the performance in the previous frame.  Less scan
+        // lines if the number of updates per second is too small, larger
+        // slower updates if they are too fast.
 
-    RectangleToUpdate.setXYWH (0, m_BackgroundNextScanLineY,
-      Width, m_BackgroundNumberOfScanLinesPerUpdate);
-    if (RectangleToUpdate.br.y > Height)
-      RectangleToUpdate.br.y = Height;
-    rfb::Region RegionChanged (RectangleToUpdate);
-    m_ServerPntr->add_changed (RegionChanged);
+        NumberOfUpdates = (Height + m_BackgroundNumberOfScanLinesPerUpdate - 1)
+          / m_BackgroundNumberOfScanLinesPerUpdate; // Will be at least 1.
+        ElapsedTime = system_time () - m_BackgroundUpdateStartTime;
+        if (ElapsedTime <= 0)
+          ElapsedTime = 1;
+        UpdatesPerSecond = NumberOfUpdates / (ElapsedTime / 1000000.0F);
+        OldUpdateSize = m_BackgroundNumberOfScanLinesPerUpdate;
+        if (UpdatesPerSecond < 20)
+          m_BackgroundNumberOfScanLinesPerUpdate--;
+        else if (UpdatesPerSecond > 25)
+          m_BackgroundNumberOfScanLinesPerUpdate++;
 
-    // Tell the server to resend the changed areas, causing it to read the
-    // screen memory in the areas marked as changed, compare it with the
-    // previous version, and send out any changes.
+        // Only go as small as 4 for performance reasons.
+        if (m_BackgroundNumberOfScanLinesPerUpdate <= 4)
+          m_BackgroundNumberOfScanLinesPerUpdate = 4;
+        else if (m_BackgroundNumberOfScanLinesPerUpdate > Height)
+          m_BackgroundNumberOfScanLinesPerUpdate = Height;
 
-    m_ServerPntr->tryUpdate ();
+        m_BackgroundNextScanLineY = 0;
+        m_BackgroundUpdateStartTime = system_time ();
+      }
 
-    m_BackgroundNextScanLineY += m_BackgroundNumberOfScanLinesPerUpdate;
+      // Mark the current work unit of scan lines as needing an update.
+
+      RectangleToUpdate.setXYWH (0, m_BackgroundNextScanLineY,
+        Width, m_BackgroundNumberOfScanLinesPerUpdate);
+      if (RectangleToUpdate.br.y > Height)
+        RectangleToUpdate.br.y = Height;
+      rfb::Region RegionChanged (RectangleToUpdate);
+      m_ServerPntr->add_changed (RegionChanged);
+
+      // Tell the server to resend the changed areas, causing it to read the
+      // screen memory in the areas marked as changed, compare it with the
+      // previous version, and send out any changes.
+
+      m_ServerPntr->tryUpdate ();
+
+      m_BackgroundNextScanLineY += m_BackgroundNumberOfScanLinesPerUpdate;
+    }
   }
   catch (...)
   {
@@ -540,7 +598,12 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
   // Do the debug printing outside the lock, since printing goes through the
   // windowing system, which needs access to the screen.
 
-  if (OldUpdateSize != 0) // If a full screen update has been finished.
+  if (m_UpdateMode == UPDATE_SHOWING_TEMPORARY)
+  {
+    sprintf (TempString, "Mode %d Switch", m_UpdateCount);
+    m_FrameBufferBeOSPntr->SetDisplayMessage (TempString);
+  }
+  else if (OldUpdateSize != 0) // If a full screen update has been finished.
   {
     if (OldUpdateSize != m_BackgroundNumberOfScanLinesPerUpdate)
       vlog.debug ("Background update size changed from %d to %d scan lines "
@@ -626,7 +689,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     case XK_Num_Lock: ChangedModifiers = B_NUM_LOCK; break;
     case XK_Shift_L: ChangedModifiers = B_LEFT_SHIFT_KEY; break;
     case XK_Shift_R: ChangedModifiers = B_RIGHT_SHIFT_KEY; break;
-    
+
      // Are alt/control swapped?  The menu preference does it by swapping the
      // keycodes in the keymap (couldn't find any other way of detecting it).
      // The usual left control key is 92, and left alt is 93.  Usual means on
