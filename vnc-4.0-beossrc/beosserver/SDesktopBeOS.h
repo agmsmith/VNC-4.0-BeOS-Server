@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.7 2004/09/13 00:18:27 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.8 2004/11/27 22:53:59 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.8  2004/11/27 22:53:59  agmsmith
+ * Changed update technique to scan a small part of the screen each time
+ * so that big updates don't slow down the interactivity by being big.
+ * There is also an adaptive algorithm that makes the updates small
+ * enough to be quick on the average.
+ *
  * Revision 1.7  2004/09/13 00:18:27  agmsmith
  * Do updates separately, only based on the timer running out,
  * so that other events all get processed first before the slow
@@ -67,15 +73,12 @@ public:
 
   void BackgroundScreenUpdateCheck ();
     // Checks for changes in a portion of the screen.  This gets called
-    // periodically by the server, at most 100 times per second.  It has a
-    // dynamic algorithm which tries to make the updates small enough so that
-    // around 50 updates get done per second, including network transmission
-    // time.
+    // periodically by the server, at most 100 times per second.  It sends the
+    // data for the changed part of the screen and also checks for a resolution
+    // change.  It has a dynamic algorithm which tries to make the updates
+    // small enough so that around 50 updates get done per second, including
+    // network transmission time.
 
-  void SendScreenUpdateData ();
-    // Sends the data for the changed part of the screen and also checks for a
-    // resolution change.
-  
   uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
     // Check all the keys in the given array of strings for each keycode to
     // see if any contain the given UTF-8 string.  Returns zero if it can't

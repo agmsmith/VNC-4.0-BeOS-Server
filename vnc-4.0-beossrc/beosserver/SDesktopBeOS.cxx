@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.14 2004/11/28 00:22:11 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.15 2004/12/02 02:24:28 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.15  2004/12/02 02:24:28  agmsmith
+ * Check for buggy operating systems which might allow the screen to
+ * change memory addresses even while it is locked.
+ *
  * Revision 1.14  2004/11/28 00:22:11  agmsmith
  * Also show frame rate.
  *
@@ -422,45 +426,104 @@ SDesktopBeOS::~SDesktopBeOS ()
 
 void SDesktopBeOS::BackgroundScreenUpdateCheck ()
 {
-  bigtime_t  ElapsedTime;
-  int        Height;
-  int        NumberOfUpdates;
-  int        OldUpdateSize;
-  rfb::Rect  RectangleToUpdate;
-  char       TempString [30];
-  static int UpdateCounter = 0;
-  float      UpdatesPerSecond;
-  int        Width;
+  bigtime_t        ElapsedTime = 0;
+  int              Height;
+  rfb::PixelFormat NewScreenFormat;
+  int              NumberOfUpdates;
+  rfb::PixelFormat OldScreenFormat;
+  int              OldUpdateSize = 0;
+  rfb::Rect        RectangleToUpdate;
+  unsigned int     ScreenFormatSerialNumber;
+  char             TempString [30];
+  static int       UpdateCounter = 0;
+  float            UpdatesPerSecond = 0;
+  int              Width;
 
   if (m_FrameBufferBeOSPntr == NULL || m_ServerPntr == NULL ||
   (Width = m_FrameBufferBeOSPntr->width ()) <= 0 ||
   (Height = m_FrameBufferBeOSPntr->height ()) <= 0)
     return;
 
-  if (m_BackgroundNextScanLineY < 0 || m_BackgroundNextScanLineY >= Height)
+  ScreenFormatSerialNumber = m_FrameBufferBeOSPntr->LockFrameBuffer ();
+
+  try
   {
-    // Time to start a new frame.  Update the number of scan lines to process
-    // based on the performance in the previous frame.  Less scan lines if the
-    // number of updates per second is too small, larger slower updates if they
-    // are too fast.
+    // Get the current screen size etc, if it has changed then inform the
+    // server about the change.  Since the screen is locked, this also means
+    // that VNC will be reading from a screen buffer that's the size it thinks
+    // it is (no going past the end of video memory and causing a crash).
 
-    NumberOfUpdates = (Height + m_BackgroundNumberOfScanLinesPerUpdate - 1) /
-      m_BackgroundNumberOfScanLinesPerUpdate; // Will be at least 1.
-    ElapsedTime = system_time () - m_BackgroundUpdateStartTime;
-    if (ElapsedTime <= 0)
-      ElapsedTime = 1;
-    UpdatesPerSecond = NumberOfUpdates / (ElapsedTime / 1000000.0F);
-    OldUpdateSize = m_BackgroundNumberOfScanLinesPerUpdate;
-    if (UpdatesPerSecond < 20)
-      m_BackgroundNumberOfScanLinesPerUpdate--;
-    else if (UpdatesPerSecond > 25)
-      m_BackgroundNumberOfScanLinesPerUpdate++;
+    OldScreenFormat = m_FrameBufferBeOSPntr->getPF ();
 
-    if (m_BackgroundNumberOfScanLinesPerUpdate <= 0)
-      m_BackgroundNumberOfScanLinesPerUpdate = 1;
-    else if (m_BackgroundNumberOfScanLinesPerUpdate > Height)
-      m_BackgroundNumberOfScanLinesPerUpdate = Height;
+    if (m_FrameBufferBeOSPntr->UpdatePixelFormatEtc () !=
+    ScreenFormatSerialNumber)
+      vlog.debug ("SDesktopBeOS::SendScreenUpdateData: "
+      "Screen pixel format serial number has changed unexpectedly!  "
+      "Possibly a bug in the OS where it changes the screen memory "
+      "pointer, ignoring our lock.");
 
+    NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
+    if (!NewScreenFormat.equal(OldScreenFormat))
+      m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
+
+    if (m_BackgroundNextScanLineY < 0 || m_BackgroundNextScanLineY >= Height)
+    {
+      // Time to start a new frame.  Update the number of scan lines to process
+      // based on the performance in the previous frame.  Less scan lines if
+      // the number of updates per second is too small, larger slower updates
+      // if they are too fast.
+
+      NumberOfUpdates = (Height + m_BackgroundNumberOfScanLinesPerUpdate - 1) /
+        m_BackgroundNumberOfScanLinesPerUpdate; // Will be at least 1.
+      ElapsedTime = system_time () - m_BackgroundUpdateStartTime;
+      if (ElapsedTime <= 0)
+        ElapsedTime = 1;
+      UpdatesPerSecond = NumberOfUpdates / (ElapsedTime / 1000000.0F);
+      OldUpdateSize = m_BackgroundNumberOfScanLinesPerUpdate;
+      if (UpdatesPerSecond < 20)
+        m_BackgroundNumberOfScanLinesPerUpdate--;
+      else if (UpdatesPerSecond > 25)
+        m_BackgroundNumberOfScanLinesPerUpdate++;
+
+      if (m_BackgroundNumberOfScanLinesPerUpdate <= 4) // Only go as small as 4
+        m_BackgroundNumberOfScanLinesPerUpdate = 4; // for performance reasons.
+      else if (m_BackgroundNumberOfScanLinesPerUpdate > Height)
+        m_BackgroundNumberOfScanLinesPerUpdate = Height;
+
+      m_BackgroundNextScanLineY = 0;
+      m_BackgroundUpdateStartTime = system_time ();
+    }
+
+    // Mark the current work unit of scan lines as needing an update.
+
+    RectangleToUpdate.setXYWH (0, m_BackgroundNextScanLineY,
+      Width, m_BackgroundNumberOfScanLinesPerUpdate);
+    if (RectangleToUpdate.br.y > Height)
+      RectangleToUpdate.br.y = Height;
+    rfb::Region RegionChanged (RectangleToUpdate);
+    m_ServerPntr->add_changed (RegionChanged);
+
+    // Tell the server to resend the changed areas, causing it to read the
+    // screen memory in the areas marked as changed, compare it with the
+    // previous version, and send out any changes.
+
+    m_ServerPntr->tryUpdate ();
+
+    m_BackgroundNextScanLineY += m_BackgroundNumberOfScanLinesPerUpdate;
+  }
+  catch (...)
+  {
+    m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
+    throw;
+  }
+
+  m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
+
+  // Do the debug printing outside the lock, since printing goes through the
+  // windowing system, which needs access to the screen.
+
+  if (OldUpdateSize != 0) // If a full screen update has been finished.
+  {
     if (OldUpdateSize != m_BackgroundNumberOfScanLinesPerUpdate)
       vlog.debug ("Background update size changed from %d to %d scan lines "
       "due to performance of %.4f updates per second in the previous full "
@@ -471,26 +534,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
     UpdateCounter++;
     sprintf (TempString, "Update #%d", UpdateCounter);
     m_FrameBufferBeOSPntr->SetDisplayMessage (TempString);
-
-    m_BackgroundNextScanLineY = 0;
-    m_BackgroundUpdateStartTime = system_time ();
   }
-
-  // Mark the current work unit of scan lines as needing an update.
-
-  RectangleToUpdate.setXYWH (0, m_BackgroundNextScanLineY,
-    Width, m_BackgroundNumberOfScanLinesPerUpdate);
-  if (RectangleToUpdate.br.y > Height)
-    RectangleToUpdate.br.y = Height;
-  rfb::Region RegionChanged (RectangleToUpdate);
-  m_ServerPntr->add_changed (RegionChanged);
-
-  // Do the actual update, including whatever other areas that have been marked
-  // as needing an update.
-
-  SendScreenUpdateData ();
-
-  m_BackgroundNextScanLineY += m_BackgroundNumberOfScanLinesPerUpdate;
 }
 
 
@@ -862,51 +906,6 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   m_LastMouseButtonState = buttonmask;
   m_LastMouseX = AbsoluteX;
   m_LastMouseY = AbsoluteY;
-}
-
-
-void SDesktopBeOS::SendScreenUpdateData ()
-{
-  rfb::PixelFormat NewScreenFormat;
-  rfb::PixelFormat OldScreenFormat;
-  unsigned int     ScreenFormatSerialNumber;
-
-  if (m_FrameBufferBeOSPntr != NULL)
-  {
-    ScreenFormatSerialNumber = m_FrameBufferBeOSPntr->LockFrameBuffer ();
-
-    try
-    {
-      // Get the current screen size etc, if it has changed then inform the
-      // server about the change.
-
-      OldScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-
-      if (m_FrameBufferBeOSPntr->UpdatePixelFormatEtc () !=
-      ScreenFormatSerialNumber)
-        vlog.debug ("SDesktopBeOS::SendScreenUpdateData: "
-        "Screen pixel format serial number has changed unexpectedly!  "
-        "Possibly a bug in the OS where it changes the screen memory "
-        "pointer, ignoring our lock.");
-
-      NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-      if (!NewScreenFormat.equal(OldScreenFormat))
-        m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
-
-      // Tell the server to resend the changed areas, causing it to read the
-      // screen memory in the areas marked as changed, compare it with the
-      // previous version, and send out any changes.
-
-      m_ServerPntr->tryUpdate ();
-    }
-    catch (...)
-    {
-      m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
-      throw;
-    }
-
-    m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
-  }
 }
 
 
