@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.4 2004/06/27 20:31:44 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.5 2004/07/19 22:30:19 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.5  2004/07/19 22:30:19  agmsmith
+ * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
+ *
  * Revision 1.4  2004/06/27 20:31:44  agmsmith
  * Got it working, so you can now see the desktop in different
  * video modes (except 8 bit).  Even lets you switch screens!
@@ -219,7 +222,7 @@ public:
     // changes.
 
 protected:
-  char m_DisplayString [1024];
+  char m_DisplayString [20];
     // This string is displayed in the server status window.  Since we couldn't
     // hide the window, or make it smaller than 10x10 pixels, we make it a
     // feature.
