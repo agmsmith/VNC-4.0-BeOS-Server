@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.13 2004/12/12 21:44:39 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.14 2005/01/02 21:09:46 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.14  2005/01/02 21:09:46  agmsmith
+ * Bump the version number.
+ *
  * Revision 1.13  2004/12/12 21:44:39  agmsmith
  * Remove dead event loop timer, it does get stuck for long times
  * when the network connection is down.
@@ -113,9 +116,9 @@ static const char *g_AppSignature =
   "application/x-vnd.agmsmith.vncserver";
 
 static const char *g_AboutText =
-  "VNC Server for BeOS, based on VNC 4.0b4\n"
+  "VNC Server for BeOS, based on VNC 4.0\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.13 2004/12/12 21:44:39 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.14 2005/01/02 21:09:46 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
