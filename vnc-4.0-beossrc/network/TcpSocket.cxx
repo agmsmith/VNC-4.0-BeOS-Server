@@ -1,4 +1,4 @@
-/* Copyright (C) 2002-2003 RealVNC Ltd.  All Rights Reserved.
+/* Copyright (C) 2002-2004 RealVNC Ltd.  All Rights Reserved.
  *    
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,11 +18,7 @@
 
 #ifdef WIN32
 //#include <io.h>
-#ifndef _WIN32_WCE
 #include <winsock2.h>
-#else
-#include <winsock.h>
-#endif
 #define errorNumber WSAGetLastError()
 #define snprintf _snprintf
 #elif defined (__BEOS__)
@@ -50,6 +46,7 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <fcntl.h>
 #endif
 
 #include <network/TcpSocket.h>
@@ -78,7 +75,7 @@ TcpSocket::initTcpSockets() {
   
   if (WSAStartup(requiredVersion, &initResult) != 0)
     throw SocketException("unable to initialise Winsock2", errorNumber);
-#elif defined (__BEOS__)
+#elif defined(__BEOS__)
 #else
   signal(SIGPIPE, SIG_IGN);
 #endif
@@ -88,7 +85,8 @@ TcpSocket::initTcpSockets() {
 
 TcpSocket::TcpSocket(int sock, bool close)
   : Socket(new FdInStream(sock), new FdOutStream(sock), true), closeFd(close)
-{}
+{
+}
 
 TcpSocket::TcpSocket(const char *host, int port)
   : closeFd(true)
@@ -98,6 +96,11 @@ TcpSocket::TcpSocket(const char *host, int port)
   // - Create a socket
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     throw SocketException("unable to create socket", errorNumber);
+
+#if !defined(WIN32) && !defined(__BEOS__)
+  // - By default, close the socket on exec()
+  fcntl(sock, F_SETFD, FD_CLOEXEC);
+#endif
 
   // - Connect it to something
 
@@ -131,7 +134,13 @@ TcpSocket::TcpSocket(const char *host, int port)
   if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
 		 (char *)&one, sizeof(one)) < 0) {
     int e = errorNumber;
-    vlog.error ("in TcpListener::TcpSocket unable to setsockopt TCP_NODELAY, error code %d, continuing on anyway.", e);
+#ifdef __BEOS__ // Allow this as a non-fatal error in BeOS.
+    vlog.error("in TcpListener::TcpSocket unable to setsockopt TCP_NODELAY, "
+      "error code %d, continuing on anyway.", e);
+#else
+    closesocket(sock);
+    throw SocketException("unable to setsockopt TCP_NODELAY", e);
+#endif
   }
 
   // Create the input and output streams
@@ -259,7 +268,10 @@ TcpListener::TcpListener(int port, bool localhostOnly, int sock, bool close_)
   if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     throw SocketException("unable to create listening socket", errorNumber);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__BEOS__)
+  // - By default, close the socket on exec()
+  fcntl(sock, F_SETFD, FD_CLOEXEC);
+
   int one = 1;
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 		 (const char *)&one, sizeof(one)) < 0) {
@@ -314,12 +326,23 @@ TcpListener::accept() {
   if ((new_sock = ::accept(fd, 0, 0)) < 0)
     throw SocketException("unable to accept new connection", errorNumber);
 
+#if !defined(WIN32) && !defined(__BEOS__)
+  // - By default, close the socket on exec()
+  fcntl(new_sock, F_SETFD, FD_CLOEXEC);
+#endif
+
   // Disable Nagle's algorithm
   int one = 1;
   if (setsockopt(new_sock, IPPROTO_TCP, TCP_NODELAY,
    (char *)&one, sizeof(one)) < 0) {
     int e = errorNumber;
-    vlog.error ("in TcpListener::accept unable to setsockopt TCP_NODELAY, error code %d, continuing on anyway.", e);
+#ifdef __BEOS__ // Nonfatal in BeOS, which can't do TCP_NODELAY in some versions.
+    vlog.error ("in TcpListener::accept unable to setsockopt TCP_NODELAY, "
+      "error code %d, continuing on anyway.", e);
+#else
+    closesocket(new_sock);
+    throw SocketException("unable to setsockopt TCP_NODELAY", e);
+#endif
   }
 
   // Create the socket object & check connection is allowed
