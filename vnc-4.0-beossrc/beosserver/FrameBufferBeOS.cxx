@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.12 2005/02/08 00:33:11 agmsmith Exp agmsmith $
+ * $Header: /CommonPPC/agmsmith/VNCServer-4.0-BeOS-AGMS-1.18/Source\040Code/beosserver/RCS/FrameBufferBeOS.cxx,v 1.15 2005/02/27 18:58:48 agmsmith Exp $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.13  2005/02/12 19:47:24  agmsmith
+ * Moved the two different colour palette structures into the
+ * parent class and unified them.
+ *
  * Revision 1.12  2005/02/08 00:33:11  agmsmith
  * Bad destruction log message.
  *
@@ -201,8 +205,8 @@ public:
     // Informs the window about a screen resolution change.
 
   color_map *m_ColourMapPntr;
-  	// Points to the colour map to be updated when the palette changes.  The
-  	// map is owned by the creator of the window, so don't deallocate it.
+    // Points to the colour map to be updated when the palette changes.  The
+    // map is owned by the creator of the window, so don't deallocate it.
 
   bool m_Connected;
     // TRUE if we are connected to the video memory, FALSE if not.  TRUE means
@@ -356,8 +360,14 @@ FrameBufferBeOS::~FrameBufferBeOS ()
 {
   if (m_StatusWindowPntr != NULL)
   {
-    m_StatusWindowPntr->Lock ();
-    m_StatusWindowPntr->Quit (); // Closing the window makes it self destruct.
+    BMessenger Messenger (NULL, m_StatusWindowPntr);
+    BMessage   QuitMessage (B_QUIT_REQUESTED);
+    BMessage   ReplyMessage;
+
+    // Locking and then quitting causes a crash on PPC, be more gentle with
+    // a shutdown message, so it exits itself using its own thread.
+
+    Messenger.SendMessage (&QuitMessage, &ReplyMessage); // Waits for reply.
     m_StatusWindowPntr = NULL;
   }
 }
@@ -567,12 +577,33 @@ unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
       case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
       case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
       case B_RGB24_BIG: // Currently unused
+        format.bpp = 32;
+        format.depth = 24;
+        format.blueShift = 0;
+        format.greenShift = 8;
+        format.redShift = 16;
+        format.redMax = format.greenMax = format.blueMax = 255;
+        break;
+
       case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
+        format.bpp = 16;
+        format.depth = 16;
+        format.blueShift = 0;
+        format.greenShift = 5;
+        format.redShift = 11;
+        format.redMax = 31;
+        format.greenMax = 63;
+        format.blueMax = 31;
+        break;
+
       case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
       case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
-        vlog.error ("Unimplemented big endian video mode #%d in "
-        "UpdatePixelFormatEtc.",
-        (unsigned int) DirectInfoPntr->pixel_format);
+        format.bpp = 16;
+        format.depth = 15;
+        format.blueShift = 0;
+        format.greenShift = 5;
+        format.redShift = 10;
+        format.redMax = format.greenMax = format.blueMax = 31;
         break;
 
       default:
@@ -788,15 +819,36 @@ unsigned int FrameBufferBScreen::UpdatePixelFormatEtc ()
     case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
     case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
     case B_RGB24_BIG: // Currently unused
-    case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
-    case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
-    case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
-      vlog.error ("Unimplemented big endian video mode #%d in "
-      "UpdatePixelFormatEtc.",
-      (unsigned int) BScreenColourSpace);
+      format.bpp = 32;
+      format.depth = 24;
+      format.blueShift = 0;
+      format.greenShift = 8;
+      format.redShift = 16;
+      format.redMax = format.greenMax = format.blueMax = 255;
       break;
 
-    default:
+    case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
+      format.bpp = 16;
+      format.depth = 16;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 11;
+      format.redMax = 31;
+      format.greenMax = 63;
+      format.blueMax = 31;
+      break;
+
+    case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
+    case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
+      format.bpp = 16;
+      format.depth = 15;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 10;
+      format.redMax = format.greenMax = format.blueMax = 31;
+      break;
+
+   default:
       vlog.error ("Unimplemented video mode #%d in UpdatePixelFormatEtc.",
       (unsigned int) BScreenColourSpace);
       break;
