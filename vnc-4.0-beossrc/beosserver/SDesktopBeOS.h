@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.13 2005/02/06 22:03:10 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.14 2005/02/13 01:42:05 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.14  2005/02/13 01:42:05  agmsmith
+ * Can now receive clipboard text from the remote clients and
+ * put it on the BeOS clipboard.
+ *
  * Revision 1.13  2005/02/06 22:03:10  agmsmith
  * Changed to use the new BScreen reading method if the
  * BDirectWindow one doesn't work.  Also removed the screen
@@ -118,6 +122,12 @@ public:
 
   virtual void keyEvent (rdr::U32 key, bool down);
     // The remote user has pressed a key.
+
+  void MakeCheapCursor ();
+    // Recreates the cheap cursor image in the current pixel format
+    // then tells the server to use it.  Call after doing setPixelBuffer
+    // since that's when the server resets its internal cursor image to
+    // match the new screen depth.
 
   virtual void pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask);
     // The remote user has moved the mouse or clicked a button.
