@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.4 2004/07/25 21:02:48 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.5 2004/08/02 15:56:46 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.5  2004/08/02 15:56:46  agmsmith
+ * Alphabetically ordered.
+ *
  * Revision 1.4  2004/07/25 21:02:48  agmsmith
  * Under construction - adding keycode simulation.
  *
@@ -52,6 +55,11 @@ class SDesktopBeOS : public rfb::SDesktop
 public:
   SDesktopBeOS ();
   virtual ~SDesktopBeOS ();
+
+  uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
+    // Check all the keys in the given array of strings for each keycode to
+    // see if any contain the given UTF-8 string.  Returns zero if it can't
+    // find it.
 
   void forcedUpdateCheck ();
     // Checks if it is time for a forced update, and does it if needed.  This

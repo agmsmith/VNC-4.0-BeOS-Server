@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.7 2004/08/02 22:00:35 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.8 2004/08/22 21:15:38 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.8  2004/08/22 21:15:38  agmsmith
+ * Keyboard work continues, adding the Latin-1 character set.
+ *
  * Revision 1.7  2004/08/02 22:00:35  agmsmith
  * Got nonprinting keys working, next up is UTF-8 generating keys.
  *
@@ -391,6 +394,29 @@ SDesktopBeOS::~SDesktopBeOS ()
 }
 
 
+uint8 SDesktopBeOS::FindKeyCodeFromMap (
+  int32 *MapOffsetArray,
+  char *KeyAsString)
+{
+  unsigned int KeyCode;
+  int32       *OffsetPntr;
+  char        *StringPntr;
+
+  OffsetPntr = MapOffsetArray + 1 /* Skip over [0]. */;
+  for (KeyCode = 1 /* zero not valid */; KeyCode <= 127;
+  KeyCode++, OffsetPntr++)
+  {
+    StringPntr = m_KeyCharStrings + *OffsetPntr;
+    if (*StringPntr == 0)
+      continue; // Length of string (pascal style with length byte) is zero.
+    if (memcmp (StringPntr + 1, KeyAsString, *StringPntr) == 0 &&
+    KeyAsString [*StringPntr] == 0 /* look for NUL at end of search string */)
+      return KeyCode;
+  }
+  return 0;
+}
+
+
 void SDesktopBeOS::forcedUpdateCheck ()
 {
   if (system_time () > m_NextForcedUpdateTime)
@@ -549,7 +575,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   if (KeyCode != 0)
   {
     SetKeyState (m_LastKeyState, KeyCode, down);
-    
+
     EventMessage.what = down ? B_KEY_DOWN : B_KEY_UP;
     EventMessage.AddInt64 ("when", system_time ());
     EventMessage.AddInt32 ("key", KeyCode);
@@ -579,14 +605,81 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     CompareVNCKeyRecords);
   if (KeyToUTF8Pntr == NULL)
   {
-    printf ("Bleeble - VNC key $%04X not in our table of key to UTF-8 strings.\n",
-      key);
+    vlog.info ("VNC keycode $%04X (%s) isn't recognised, ignoring it.",
+      key, down ? "down" : "up");
     return; // Key not handled, ignore it.
   }
 
-printf ("Bleeble - VNC key $%04X goes to string \"%s\" (length %ld bytes).\n",
-key, KeyToUTF8Pntr->utf8String, strlen (KeyToUTF8Pntr->utf8String));
-//  bleeble;
+  // Look for the UTF-8 string in the keymap tables which are currently active
+  // (reflecting the current modifier keys) to see which key code it is.
+
+  strcpy (KeyAsString, KeyToUTF8Pntr->utf8String);
+  KeyCode = 0;
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY) &&
+  /* Can't type control characters while the command key is down */
+  !(m_LastKeyState.modifiers & B_COMMAND_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->control_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
+  (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
+  (m_LastKeyState.modifiers & B_SHIFT_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->option_caps_shift_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
+  (m_LastKeyState.modifiers & B_CAPS_LOCK))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->option_caps_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
+  (m_LastKeyState.modifiers & B_SHIFT_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->option_shift_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->option_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
+  (m_LastKeyState.modifiers & B_SHIFT_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->caps_shift_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CAPS_LOCK))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->caps_map, KeyAsString);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_SHIFT_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->shift_map, KeyAsString);
+  if (KeyCode == 0)
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->normal_map, KeyAsString);
+
+  if (KeyCode != 0)
+  {
+    // Got a key that works with the current modifier settings.
+    // Just simulate pressing it.
+
+    SetKeyState (m_LastKeyState, KeyCode, down);
+
+    EventMessage.what = down ? B_KEY_DOWN : B_KEY_UP;
+    EventMessage.AddInt64 ("when", system_time ());
+    EventMessage.AddInt32 ("key", KeyCode);
+    EventMessage.AddInt32 ("modifiers", m_LastKeyState.modifiers);
+    EventMessage.AddInt8 ("byte", KeyAsString [0]);
+    EventMessage.AddString ("bytes", KeyAsString);
+    EventMessage.AddData ("states", B_UINT8_TYPE,
+      m_LastKeyState.key_states, 16);
+    EventMessage.AddInt32 ("raw_char", KeyAsString [0]); // Could be wrong.
+    m_InputDeviceKeyboardPntr->Control ('ViNC', &EventMessage);
+    EventMessage.MakeEmpty ();
+    return;
+  }
+
+  // The key isn't an obvious one.  Check all the keymap tables and simulate
+  // pressing shift keys etc. to get that code, then send the message for that
+  // key pressed, then release the temporary modifier key changes.  Well,
+  // that's a lot of work so it will be done later if needed.  I won't even
+  // write much about dead keys.
+
+  vlog.info ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
+    "which BeOS keys need to be \"pressed\" to achieve that.  Ignoring it.",
+    key, down ? "down" : "up", KeyAsString);
 }
 
 
@@ -710,7 +803,7 @@ void SDesktopBeOS::SendUnmappedKeys (
   uint8    Mask;
   uint8    NewBits;
   uint8    OldBits;
-  
+
   KeyCode = 0;
   for (ByteIndex = 0; ByteIndex < 7; ByteIndex++)
   {
