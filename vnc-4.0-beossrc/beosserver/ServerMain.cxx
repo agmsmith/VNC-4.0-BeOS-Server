@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.9 2004/09/13 01:41:53 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.10 2004/11/22 02:40:40 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.10  2004/11/22 02:40:40  agmsmith
+ * Changed from Pulse() timing to using a separate thread, so now
+ * mouse clicks and other time sensitive responses are much more
+ * accurate (1/60 second accuracy at best).
+ *
  * Revision 1.9  2004/09/13 01:41:53  agmsmith
  * Update rate time limits now in the desktop module.
  *
@@ -90,7 +95,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.9 2004/09/13 01:41:53 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.10 2004/11/22 02:40:40 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -233,8 +238,15 @@ void ServerApp::PollNetworkLoop ()
     
     while (!m_NetworkMonitorSuicideDesired)
     {
+      // Do at most 100 updates per second, more is useless since the screen
+      // refresh rate and Human eye aren't that fast.  Since the screen copying
+      // code is aiming at 50 updates per second, it has 1/100 of a second to
+      // do its work (most of the time that means looking at a small patch of
+      // the screen and noticing that it hasn't changed), plus the 1/100 second
+      // delay here to let the computer do other work.
+
       tv.tv_sec = 0;
-      tv.tv_usec = 50*1000;
+      tv.tv_usec = 5000; // Time delay in millionths of a second.
   
       FD_ZERO(&rfds);
       FD_SET(m_TcpListenerPntr->getFd(), &rfds);
@@ -262,9 +274,7 @@ void ServerApp::PollNetworkLoop ()
       m_VNCServerPntr->checkTimeouts();
   
       if (m_VNCServerPntr->clientsReadyForUpdate ())
-        m_FakeDesktopPntr->forcedUpdateCheck ();
-
-      snooze (1000000 / 60); // At most 60 updates per second.
+        m_FakeDesktopPntr->BackgroundScreenUpdateCheck ();
     }
   }
   catch (rdr::Exception &e)
