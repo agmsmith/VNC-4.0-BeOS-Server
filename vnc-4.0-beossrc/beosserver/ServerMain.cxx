@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.1 2004/01/03 02:32:55 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.2 2004/01/11 00:55:42 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.2  2004/01/11 00:55:42  agmsmith
+ * Added network initialisation and basic server code.  Now accepts incoming
+ * connections!  But doesn't display a black remote screen yet.
+ *
  * Revision 1.1  2004/01/03 02:32:55  agmsmith
  * Initial revision
  *
@@ -59,16 +63,10 @@
 static const char *g_AppSignature =
   "application/x-vnd.agmsmith.vncserver";
 
-static const char *g_SettingsDirectoryName =
-  "Virtual Network Computing";
-static const char *g_SettingsFileName =
-  "VNC Server Settings";
-static const uint32 g_SettingsWhatCode = 'VNCS';
-
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.1 2004/01/03 02:32:55 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.2 2004/01/11 00:55:42 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -85,7 +83,7 @@ static rfb::StringParameter hosts("Hosts",
   "Filter describing which hosts are allowed access to this server",
   "+");
 
-// static VncAuthPasswdConfigParameter vncAuthPasswd;
+static rfb::VncAuthPasswdFileParameter vncAuthPasswd;
 
 
 
@@ -109,10 +107,6 @@ public: /* Constructor and destructor. */
   virtual bool QuitRequested ();
   virtual void ReadyToRun ();
 
-  status_t LoadSaveSettings (bool DoLoad);
-    /* Either loads the settings from the saved settings file into our class
-    variables, or saves them to the settings file. */
-
 public: /* Member variables. */
   rfb::SStaticDesktop *m_FakeDesktopPntr;
     /* Provides access to the frame buffer, mouse, etc for VNC to use. */
@@ -120,10 +114,6 @@ public: /* Member variables. */
   BPath m_SettingsDirectoryPath;
     /* The constructor initialises this to the settings directory path.  It
     never changes after that. */
-
-  bool m_SettingsHaveChanged;
-    /* Set to TRUE to show that the settings have changed, which will make it
-    save them when this ServerApp object is destroyed. */
 
   network::TcpListener *m_TcpListenerPntr;
     /* A socket that listens for incoming connections. */
@@ -142,31 +132,14 @@ public: /* Member variables. */
 ServerApp::ServerApp ()
 : BApplication (g_AppSignature),
   m_FakeDesktopPntr (NULL),
-  m_SettingsHaveChanged (false),
   m_TcpListenerPntr (NULL),
   m_VNCServerPntr (NULL)
 {
-  status_t    ErrorCode;
-
-  /* Set up the pathname which identifies our settings directory.  Note that
-  the actual settings are loaded later on (or set to defaults) by the main()
-  function, before this BApplication starts running.  So we don't bother
-  initialising the other setting related variables here. */
-
-  ErrorCode =
-    find_directory (B_USER_SETTINGS_DIRECTORY, &m_SettingsDirectoryPath);
-  if (ErrorCode == B_OK)
-    ErrorCode = m_SettingsDirectoryPath.Append (g_SettingsDirectoryName);
-  if (ErrorCode != B_OK)
-    m_SettingsDirectoryPath.SetTo (".");
-    }
+}
 
 
 ServerApp::~ServerApp ()
 {
-  if (m_SettingsHaveChanged)
-    LoadSaveSettings (false /* DoLoad */);
-
   delete m_TcpListenerPntr;
   delete m_VNCServerPntr;
   delete m_FakeDesktopPntr;
@@ -188,102 +161,6 @@ void ServerApp::AboutRequested ()
 }
 
 
-/* Either load the settings (DoLoad is TRUE) from the configuration file or
-write them (DoLoad is FALSE) to it.  The configuration file is a flattened
-BMessage containing the various program settings.  If it doesn't exist (and its
-parent directories don't exist) then it will be created when saving.  If it
-doesn't exist when loading, the settings will be set to default values. */
-
-status_t ServerApp::LoadSaveSettings (bool DoLoad)
-{
-  status_t    ErrorCode;
-  BMessage    Settings;
-  BDirectory  SettingsDirectory;
-  BFile       SettingsFile;
-  char        TempString [2048];
-
-  /* Presumably the settings have been initialised to default values, so don't
-  need to reset them here if doing a load. */
-
-  /* Look for our settings directory.  When saving we can try to create it. */
-
-  ErrorCode = SettingsDirectory.SetTo (m_SettingsDirectoryPath.Path ());
-  if (ErrorCode != B_OK)
-  {
-    if (DoLoad || ErrorCode != B_ENTRY_NOT_FOUND)
-    {
-      sprintf (TempString, "Can't find settings directory \"%s\"",
-        m_SettingsDirectoryPath.Path ());
-      goto ErrorExit;
-    }
-    ErrorCode = create_directory (m_SettingsDirectoryPath.Path (), 0755);
-    if (ErrorCode == B_OK)
-      ErrorCode = SettingsDirectory.SetTo (m_SettingsDirectoryPath.Path ());
-    if (ErrorCode != B_OK)
-    {
-      sprintf (TempString, "Can't create settings directory \"%s\"",
-        m_SettingsDirectoryPath.Path ());
-      goto ErrorExit;
-    }
-  }
-
-  ErrorCode = SettingsFile.SetTo (&SettingsDirectory, g_SettingsFileName,
-    DoLoad ? B_READ_ONLY : B_READ_WRITE | B_CREATE_FILE | B_ERASE_FILE);
-  if (ErrorCode != B_OK)
-  {
-    sprintf (TempString, "Can't open settings file \"%s\" in directory \"%s\" "
-      "for %s", g_SettingsFileName, m_SettingsDirectoryPath.Path(),
-      DoLoad ? "reading" : "writing");
-    goto ErrorExit;
-  }
-
-  if (DoLoad)
-  {
-    ErrorCode = Settings.Unflatten (&SettingsFile);
-    if (ErrorCode != 0 || Settings.what != g_SettingsWhatCode)
-    {
-      sprintf (TempString, "Corrupt data detected while reading settings "
-        "file \"%s\" in directory \"%s\", will revert to defaults",
-        g_SettingsFileName, m_SettingsDirectoryPath.Path());
-      goto ErrorExit;
-    }
-  }
-
-  /* Transfer the settings between the BMessage and our various global
-  variables.  For loading, if the setting isn't present, leave it at the
-  default value. */
-
-  ErrorCode = B_OK; /* So that saving settings can record an error. */
-
-  if (DoLoad)
-    rfb::Configuration::setParam (Settings);
-  else
-    rfb::Configuration::dumpParamsToBMessage (Settings);
-
-  /* Save the settings BMessage to the settings file. */
-
-  if (!DoLoad)
-  {
-    Settings.what = g_SettingsWhatCode;
-    ErrorCode = Settings.Flatten (&SettingsFile);
-    if (ErrorCode != 0)
-    {
-      sprintf (TempString, "Problems while writing settings file \"%s\" in "
-        "directory \"%s\"", g_SettingsFileName,
-        m_SettingsDirectoryPath.Path ());
-      goto ErrorExit;
-    }
-  }
-
-  m_SettingsHaveChanged = false;
-  return B_OK;
-
-ErrorExit: /* Error message in TempString, code in ErrorCode. */
-    vlog.error (rdr::SystemException (TempString, ErrorCode).str());
-  return ErrorCode;
-}
-
-
 void ServerApp::MessageReceived (BMessage *MessagePntr)
 {
   switch (MessagePntr->what)
@@ -299,7 +176,6 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
 
 void ServerApp::Pulse ()
 {
-  printf ("Pulse.\n");
   try
   {
     fd_set rfds;
@@ -313,31 +189,25 @@ void ServerApp::Pulse ()
 
     std::list<network::Socket*> sockets;
     m_VNCServerPntr->getSockets(&sockets);
-    std::list<network::Socket*>::iterator i;
-    for (i = sockets.begin(); i != sockets.end(); i++) {
-      FD_SET((*i)->getFd(), &rfds);
-    }
+    std::list<network::Socket*>::iterator iter;
+    for (iter = sockets.begin(); iter != sockets.end(); iter++)
+      FD_SET((*iter)->getFd(), &rfds);
 
     int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
     if (n < 0) throw rdr::SystemException("select",errno);
-printf ("Select has returned.\n");
+
+    for (iter = sockets.begin(); iter != sockets.end(); iter++) {
+      if (FD_ISSET((*iter)->getFd(), &rfds)) {
+        m_VNCServerPntr->processSocketEvent(*iter);
+      }
+    }
 
     if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
-printf ("Accepting an incoming connection.\n");
       network::Socket* sock = m_TcpListenerPntr->accept();
       m_VNCServerPntr->addClient(sock);
     }
 
-    m_VNCServerPntr->getSockets(&sockets);
-    for (i = sockets.begin(); i != sockets.end(); i++) {
-      if (FD_ISSET((*i)->getFd(), &rfds)) {
-printf ("Processing socket #%d\n", (*i)->getFd());
-        m_VNCServerPntr->processSocketEvent(*i);
-      }
-    }
-
     m_VNCServerPntr->checkIdleTimeouts();
-    //m_FakeDesktopPntr->poll();
   }
   catch (rdr::Exception &e)
   {
@@ -417,7 +287,6 @@ int main (int argc, char** argv)
   try {
     rfb::initStdIOLoggers();
     rfb::LogWriter::setLogParams("*:stderr:30");
-    MyApp.LoadSaveSettings (true /* DoLoad */);
 
     // Override the default parameters with new values from the command line.
     // Display the usage message and exit the program if an unknown parameter
@@ -425,23 +294,18 @@ int main (int argc, char** argv)
 
     for (int i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
-        if (rfb::Configuration::setParam(argv[i])) {
-          MyApp.m_SettingsHaveChanged = true;
+        if (rfb::Configuration::setParam(argv[i]))
           continue;
-        }
         if (i+1 < argc) {
           if (rfb::Configuration::setParam(&argv[i][1], argv[i+1])) {
             i++;
-            MyApp.m_SettingsHaveChanged = true;
             continue;
           }
         }
         usage(argv[0]);
       }
-      if (rfb::Configuration::setParam(argv[i])) {
-        MyApp.m_SettingsHaveChanged = true;
+      if (rfb::Configuration::setParam(argv[i]))
         continue;
-      }
       usage(argv[0]);
     }
 
