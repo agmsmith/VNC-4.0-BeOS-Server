@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.8 2004/07/19 22:30:19 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.9 2004/09/13 01:41:53 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.9  2004/09/13 01:41:53  agmsmith
+ * Update rate time limits now in the desktop module.
+ *
  * Revision 1.8  2004/07/19 22:30:19  agmsmith
  * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
  *
@@ -87,7 +90,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.8 2004/07/19 22:30:19 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.9 2004/09/13 01:41:53 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -124,13 +127,26 @@ public: /* Constructor and destructor. */
   /* BeOS virtual functions. */
   virtual void AboutRequested ();
   virtual void MessageReceived (BMessage *MessagePntr);
-  virtual void Pulse ();
   virtual bool QuitRequested ();
   virtual void ReadyToRun ();
+
+  /* Our class methods. */
+  void PollNetworkLoop ();
 
 public: /* Member variables. */
   SDesktopBeOS *m_FakeDesktopPntr;
     /* Provides access to the frame buffer, mouse, etc for VNC to use. */
+
+  volatile bool m_NetworkMonitorSuicideDesired;
+    /* Set this to TRUE to request that the network monitor thread exit as soon
+    as safely possible.  FALSE means keep on running.  When it shuts down, it
+    will reset m_NetworkMonitorThreadID to -1. */
+
+  thread_id m_NetworkMonitorThreadID;
+    /* The ID of the thread which periodically checks for incoming data
+    packets, reads the screen, and does all the work in a tight polling loop
+    (too tight to use Pulse()).  Negative if it doesn't exist.  See also
+    m_NetworkMonitorSuicideDesired. */
 
   network::TcpListener *m_TcpListenerPntr;
     /* A socket that listens for incoming connections. */
@@ -149,6 +165,8 @@ public: /* Member variables. */
 ServerApp::ServerApp ()
 : BApplication (g_AppSignature),
   m_FakeDesktopPntr (NULL),
+  m_NetworkMonitorSuicideDesired (false),
+  m_NetworkMonitorThreadID (-1),
   m_TcpListenerPntr (NULL),
   m_VNCServerPntr (NULL)
 {
@@ -157,6 +175,18 @@ ServerApp::ServerApp ()
 
 ServerApp::~ServerApp ()
 {
+  thread_id GrabbedThreadID; // Grab it before it gets changed by thread death.
+  status_t  ThreadExitCode = 0;
+
+  // Kill off the thread that's busy polling the network connections.
+
+  GrabbedThreadID = m_NetworkMonitorThreadID;
+  m_NetworkMonitorSuicideDesired = TRUE;
+  if (GrabbedThreadID >= 0)
+    wait_for_thread (GrabbedThreadID, &ThreadExitCode);
+
+  // Deallocate our main data structures.
+
   delete m_TcpListenerPntr;
   delete m_VNCServerPntr;
   delete m_FakeDesktopPntr;
@@ -191,47 +221,51 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
 }
 
 
-void ServerApp::Pulse ()
+void ServerApp::PollNetworkLoop ()
 {
   if (m_VNCServerPntr == NULL)
     return;
 
   try
   {
-    bigtime_t      ElapsedTime;
     fd_set         rfds;
     struct timeval tv;
-
-    tv.tv_sec = 0;
-    tv.tv_usec = 50*1000;
-
-    FD_ZERO(&rfds);
-    FD_SET(m_TcpListenerPntr->getFd(), &rfds);
-
-    std::list<network::Socket*> sockets;
-    m_VNCServerPntr->getSockets(&sockets);
-    std::list<network::Socket*>::iterator iter;
-    for (iter = sockets.begin(); iter != sockets.end(); iter++)
-      FD_SET((*iter)->getFd(), &rfds);
-
-    int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
-    if (n < 0) throw rdr::SystemException("select",errno);
-
-    for (iter = sockets.begin(); iter != sockets.end(); iter++) {
-      if (FD_ISSET((*iter)->getFd(), &rfds)) {
-        m_VNCServerPntr->processSocketEvent(*iter);
+    
+    while (!m_NetworkMonitorSuicideDesired)
+    {
+      tv.tv_sec = 0;
+      tv.tv_usec = 50*1000;
+  
+      FD_ZERO(&rfds);
+      FD_SET(m_TcpListenerPntr->getFd(), &rfds);
+  
+      std::list<network::Socket*> sockets;
+      m_VNCServerPntr->getSockets(&sockets);
+      std::list<network::Socket*>::iterator iter;
+      for (iter = sockets.begin(); iter != sockets.end(); iter++)
+        FD_SET((*iter)->getFd(), &rfds);
+  
+      int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
+      if (n < 0) throw rdr::SystemException("select",errno);
+  
+      for (iter = sockets.begin(); iter != sockets.end(); iter++) {
+        if (FD_ISSET((*iter)->getFd(), &rfds)) {
+          m_VNCServerPntr->processSocketEvent(*iter);
+        }
       }
+  
+      if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
+        network::Socket* sock = m_TcpListenerPntr->accept();
+        m_VNCServerPntr->addClient(sock);
+      }
+  
+      m_VNCServerPntr->checkTimeouts();
+  
+      if (m_VNCServerPntr->clientsReadyForUpdate ())
+        m_FakeDesktopPntr->forcedUpdateCheck ();
+
+      snooze (1000000 / 60); // At most 60 updates per second.
     }
-
-    if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
-      network::Socket* sock = m_TcpListenerPntr->accept();
-      m_VNCServerPntr->addClient(sock);
-    }
-
-    m_VNCServerPntr->checkTimeouts();
-
-    if (m_VNCServerPntr->clientsReadyForUpdate ())
-      m_FakeDesktopPntr->forcedUpdateCheck ();
   }
   catch (rdr::Exception &e)
   {
@@ -245,6 +279,21 @@ void ServerApp::Pulse ()
 bool ServerApp::QuitRequested ()
 {
   return BApplication::QuitRequested ();
+}
+
+
+/* A helper function for starting a separate thread for polling the network.
+The unspecified pointer argument is actually a pointer to the ServerApp to use
+when calling the member function PollNetworkLoop(). */
+
+int32 PollNetworkInit (void *PassedInData)
+{
+  ServerApp *ServerAppPntr;
+
+  ServerAppPntr = (ServerApp *) PassedInData;
+  ServerAppPntr->PollNetworkLoop ();
+  ServerAppPntr->m_NetworkMonitorThreadID = -1;
+  return B_OK; // Return code of thread.
 }
 
 
@@ -264,14 +313,21 @@ void ServerApp::ReadyToRun ()
     network::TcpSocket::initTcpSockets();
     m_TcpListenerPntr = new network::TcpListener ((int)port_number);
     vlog.info("Listening on port %d", (int)port_number);
+
+    m_NetworkMonitorThreadID = spawn_thread (PollNetworkInit,
+      "VNCPollNetwork", B_NORMAL_PRIORITY, this);
+    if (m_NetworkMonitorThreadID < 0)
+      throw rfb::Exception ("ServerApp::ReadyToRun: "
+        "Unable to create network polling thread.");
+    resume_thread (m_NetworkMonitorThreadID); // Start the thread running.
   }
   catch (rdr::Exception &e)
   {
     vlog.error(e.str());
     PostMessage (B_QUIT_REQUESTED);
   }
-  SetPulseRate (100000);
 }
+
 
 
 // Display the program usage info, then terminate the program.
