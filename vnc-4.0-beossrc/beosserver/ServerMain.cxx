@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.1 2004/01/03 02:31:13 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.1 2004/01/03 02:32:55 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,13 +22,24 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.1  2004/01/03 02:32:55  agmsmith
+ * Initial revision
+ *
  */
 
-#include <rfb/VNCServerST.h>
-#include <rfb/SSecurityFactoryStandard.h>
-#include <rfb/LogWriter.h>
-#include <rfb/Logger_stdio.h>
+/* Posix headers. */
+
+#include <errno.h>
+#include <socket.h>
+
+/* VNC library headers. */
+
 #include <network/TcpSocket.h>
+#include <rfb/Logger_stdio.h>
+#include <rfb/LogWriter.h>
+#include <rfb/SDesktop.h>
+#include <rfb/SSecurityFactoryStandard.h>
+#include <rfb/VNCServerST.h>
 
 /* BeOS (Be Operating System) headers. */
 
@@ -57,7 +68,7 @@ static const uint32 g_SettingsWhatCode = 'VNCS';
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.1 2004/01/03 02:31:13 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/ServerMain.cxx,v 1.1 2004/01/03 02:32:55 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -80,7 +91,9 @@ static rfb::StringParameter hosts("Hosts",
 
 /******************************************************************************
  * ServerApp is the top level class for this program.  This handles messages
- * from the outside world and does some of the processing.
+ * from the outside world and does some of the processing.  It also has
+ * pointers to important data structures, like the VNC server stuff, or the
+ * desktop (screen buffer access thing).
  */
 
 class ServerApp : public BApplication
@@ -101,11 +114,22 @@ public: /* Constructor and destructor. */
     variables, or saves them to the settings file. */
 
 public: /* Member variables. */
+  rfb::SStaticDesktop *m_FakeDesktopPntr;
+    /* Provides access to the frame buffer, mouse, etc for VNC to use. */
+
   BPath m_SettingsDirectoryPath;
     /* The constructor initialises this to the settings directory path.  It
     never changes after that. */
 
   bool m_SettingsHaveChanged;
+    /* Set to TRUE to show that the settings have changed, which will make it
+    save them when this ServerApp object is destroyed. */
+
+  network::TcpListener *m_TcpListenerPntr;
+    /* A socket that listens for incoming connections. */
+
+  rfb::VNCServerST *m_VNCServerPntr;
+    /* A lot of the pre-made message processing logic is in this object. */
 };
 
 
@@ -117,7 +141,10 @@ public: /* Member variables. */
 
 ServerApp::ServerApp ()
 : BApplication (g_AppSignature),
-  m_SettingsHaveChanged (false)
+  m_FakeDesktopPntr (NULL),
+  m_SettingsHaveChanged (false),
+  m_TcpListenerPntr (NULL),
+  m_VNCServerPntr (NULL)
 {
   status_t    ErrorCode;
 
@@ -132,13 +159,17 @@ ServerApp::ServerApp ()
     ErrorCode = m_SettingsDirectoryPath.Append (g_SettingsDirectoryName);
   if (ErrorCode != B_OK)
     m_SettingsDirectoryPath.SetTo (".");
-}
+    }
 
 
 ServerApp::~ServerApp ()
 {
   if (m_SettingsHaveChanged)
     LoadSaveSettings (false /* DoLoad */);
+
+  delete m_TcpListenerPntr;
+  delete m_VNCServerPntr;
+  delete m_FakeDesktopPntr;
 }
 
 
@@ -248,7 +279,7 @@ status_t ServerApp::LoadSaveSettings (bool DoLoad)
   return B_OK;
 
 ErrorExit: /* Error message in TempString, code in ErrorCode. */
-	  vlog.error (rdr::SystemException (TempString, ErrorCode).str());
+    vlog.error (rdr::SystemException (TempString, ErrorCode).str());
   return ErrorCode;
 }
 
@@ -266,10 +297,52 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
 }
 
 
-
-
 void ServerApp::Pulse ()
 {
+  printf ("Pulse.\n");
+  try
+  {
+    fd_set rfds;
+    struct timeval tv;
+
+    tv.tv_sec = 0;
+    tv.tv_usec = 50*1000;
+
+    FD_ZERO(&rfds);
+    FD_SET(m_TcpListenerPntr->getFd(), &rfds);
+
+    std::list<network::Socket*> sockets;
+    m_VNCServerPntr->getSockets(&sockets);
+    std::list<network::Socket*>::iterator i;
+    for (i = sockets.begin(); i != sockets.end(); i++) {
+      FD_SET((*i)->getFd(), &rfds);
+    }
+
+    int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
+    if (n < 0) throw rdr::SystemException("select",errno);
+printf ("Select has returned.\n");
+
+    if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
+printf ("Accepting an incoming connection.\n");
+      network::Socket* sock = m_TcpListenerPntr->accept();
+      m_VNCServerPntr->addClient(sock);
+    }
+
+    m_VNCServerPntr->getSockets(&sockets);
+    for (i = sockets.begin(); i != sockets.end(); i++) {
+      if (FD_ISSET((*i)->getFd(), &rfds)) {
+printf ("Processing socket #%d\n", (*i)->getFd());
+        m_VNCServerPntr->processSocketEvent(*i);
+      }
+    }
+
+    m_VNCServerPntr->checkIdleTimeouts();
+    //m_FakeDesktopPntr->poll();
+  }
+  catch (rdr::Exception &e)
+  {
+    vlog.error(e.str());
+  }
 }
 
 
@@ -281,11 +354,29 @@ bool ServerApp::QuitRequested ()
 }
 
 
-
-
 void ServerApp::ReadyToRun ()
 {
-  SetPulseRate (500000);
+  try
+  {
+    /* VNC Setup. */
+
+    m_FakeDesktopPntr = new rfb::SStaticDesktop (rfb::Point (640, 480));
+
+    m_VNCServerPntr = new rfb::VNCServerST ("MyBeOSVNCServer",
+      m_FakeDesktopPntr, NULL);
+
+    m_FakeDesktopPntr->setServer (m_VNCServerPntr);
+
+    network::TcpSocket::initTcpSockets();
+    m_TcpListenerPntr = new network::TcpListener ((int)port_number);
+    vlog.info("Listening on port %d", (int)port_number);
+  }
+  catch (rdr::Exception &e)
+  {
+    vlog.error(e.str());
+    PostMessage (B_QUIT_REQUESTED);
+  }
+  SetPulseRate (1000000);
 }
 
 
@@ -294,7 +385,7 @@ void ServerApp::ReadyToRun ()
 static void usage (const char *programName)
 {
   fprintf(stderr, g_AboutText);
-  fprintf(stderr, "\nusage: %s [<parameters>]\n", programName);
+  fprintf(stderr, "\n\nusage: %s [<parameters>]\n", programName);
   fprintf(stderr,"\n"
     "Parameters can be turned on with -<param> or off with -<param>=0\n"
     "Parameters which take a value can be specified as "
@@ -317,14 +408,20 @@ int main (int argc, char** argv)
   ServerApp MyApp;
   int       ReturnCode = 0;
 
+  if (MyApp.InitCheck () != B_OK)
+  {
+    vlog.error("Unable to initialise BApplication.");
+    return -1;
+  }
+
   try {
     rfb::initStdIOLoggers();
     rfb::LogWriter::setLogParams("*:stderr:30");
     MyApp.LoadSaveSettings (true /* DoLoad */);
 
     // Override the default parameters with new values from the command line.
-    // Display the usage message and exit the program if an unknown parameter is
-    // encountered.
+    // Display the usage message and exit the program if an unknown parameter
+    // is encountered.
 
     for (int i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
@@ -348,9 +445,8 @@ int main (int argc, char** argv)
       usage(argv[0]);
     }
 
-    ReturnCode = MyApp.InitCheck ();
-    if (ReturnCode == 0)
-      ReturnCode = MyApp.Run ();
+    MyApp.Run (); // Run the main event loop.
+    ReturnCode = 0;
   }
   catch (rdr::SystemException &s) {
     vlog.error(s.str());
