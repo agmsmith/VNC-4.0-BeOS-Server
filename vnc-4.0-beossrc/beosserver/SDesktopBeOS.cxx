@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.8 2004/08/22 21:15:38 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.9 2004/08/23 00:24:17 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.9  2004/08/23 00:24:17  agmsmith
+ * Added a search for plain keyboard keys, so now you can type text
+ * over VNC!  But funny key combinations likely won't work.
+ *
  * Revision 1.8  2004/08/22 21:15:38  agmsmith
  * Keyboard work continues, adding the Latin-1 character set.
  *
@@ -498,11 +502,14 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   VNCKeyToUTF8Pointer KeyToUTF8Pntr;
   key_info            NewKeyState;
 
-  printf ("SDesktopBeOS::keyEvent  Key %X, down: %d\n", key, down);
-
   if (m_InputDeviceKeyboardPntr == NULL || m_FrameBufferBeOSPntr == NULL ||
   m_FrameBufferBeOSPntr->width () <= 0 || m_KeyMapPntr == NULL)
     return;
+
+  // Hack - force a screen update a short time after a key is pressed, since it
+  // is likely that the screen will have changed a bit.
+
+  m_NextForcedUpdateTime = system_time () + 300000;
 
   NewKeyState = m_LastKeyState;
 
@@ -677,7 +684,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   // that's a lot of work so it will be done later if needed.  I won't even
   // write much about dead keys.
 
-  vlog.info ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
+  vlog.debug ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
     "which BeOS keys need to be \"pressed\" to achieve that.  Ignoring it.",
     key, down ? "down" : "up", KeyAsString);
 }
