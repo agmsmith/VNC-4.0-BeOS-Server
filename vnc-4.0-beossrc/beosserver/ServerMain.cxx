@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.10 2004/11/22 02:40:40 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.11 2004/11/27 22:53:12 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.11  2004/11/27 22:53:12  agmsmith
+ * Oops, forgot about the network time delay for new data.  Make it shorter
+ * so that the overall update loop is faster.
+ *
  * Revision 1.10  2004/11/22 02:40:40  agmsmith
  * Changed from Pulse() timing to using a separate thread, so now
  * mouse clicks and other time sensitive responses are much more
@@ -89,13 +93,19 @@
  * Global variables, and not-so-variable things too.  Grouped by functionality.
  */
 
+static const unsigned int MSG_DO_POLLING_STEP = 'VPol';
+  /* The message code for the BMessage which triggers a polling code to check a
+  slice of the screen for changes.  The BMessage doesn't have any data, and is
+  sent when the polling work is done, so that the next polling task is
+  triggered almost immedately. */
+
 static const char *g_AppSignature =
   "application/x-vnd.agmsmith.vncserver";
 
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.10 2004/11/22 02:40:40 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.11 2004/11/27 22:53:12 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -132,26 +142,23 @@ public: /* Constructor and destructor. */
   /* BeOS virtual functions. */
   virtual void AboutRequested ();
   virtual void MessageReceived (BMessage *MessagePntr);
+  virtual void Pulse ();
   virtual bool QuitRequested ();
   virtual void ReadyToRun ();
 
   /* Our class methods. */
-  void PollNetworkLoop ();
+  void PollNetwork ();
 
 public: /* Member variables. */
   SDesktopBeOS *m_FakeDesktopPntr;
     /* Provides access to the frame buffer, mouse, etc for VNC to use. */
 
-  volatile bool m_NetworkMonitorSuicideDesired;
-    /* Set this to TRUE to request that the network monitor thread exit as soon
-    as safely possible.  FALSE means keep on running.  When it shuts down, it
-    will reset m_NetworkMonitorThreadID to -1. */
-
-  thread_id m_NetworkMonitorThreadID;
-    /* The ID of the thread which periodically checks for incoming data
-    packets, reads the screen, and does all the work in a tight polling loop
-    (too tight to use Pulse()).  Negative if it doesn't exist.  See also
-    m_NetworkMonitorSuicideDesired. */
+  bigtime_t m_TimeOfLastBackgroundUpdate;
+    /* The server main loop updates this with the current time whenever it
+    finishes an update (checking for network input and optionally sending a
+    sliver of the screen to the client).  If a long time goes by without an
+    update, the pulse thread will inject a new BMessage, just in case the chain
+    of update BMessages was broken. */
 
   network::TcpListener *m_TcpListenerPntr;
     /* A socket that listens for incoming connections. */
@@ -170,8 +177,7 @@ public: /* Member variables. */
 ServerApp::ServerApp ()
 : BApplication (g_AppSignature),
   m_FakeDesktopPntr (NULL),
-  m_NetworkMonitorSuicideDesired (false),
-  m_NetworkMonitorThreadID (-1),
+  m_TimeOfLastBackgroundUpdate (0),
   m_TcpListenerPntr (NULL),
   m_VNCServerPntr (NULL)
 {
@@ -180,16 +186,6 @@ ServerApp::ServerApp ()
 
 ServerApp::~ServerApp ()
 {
-  thread_id GrabbedThreadID; // Grab it before it gets changed by thread death.
-  status_t  ThreadExitCode = 0;
-
-  // Kill off the thread that's busy polling the network connections.
-
-  GrabbedThreadID = m_NetworkMonitorThreadID;
-  m_NetworkMonitorSuicideDesired = TRUE;
-  if (GrabbedThreadID >= 0)
-    wait_for_thread (GrabbedThreadID, &ThreadExitCode);
-
   // Deallocate our main data structures.
 
   delete m_TcpListenerPntr;
@@ -215,18 +211,16 @@ void ServerApp::AboutRequested ()
 
 void ServerApp::MessageReceived (BMessage *MessagePntr)
 {
-  switch (MessagePntr->what)
-  {
-  }
-
-  /* Pass the unprocessed message to the inherited function, maybe it knows
-  what to do.  This includes replies to messages we sent ourselves. */
-
-  BApplication::MessageReceived (MessagePntr);
+  if (MessagePntr->what == MSG_DO_POLLING_STEP)
+    PollNetwork ();
+  else
+    /* Pass the unprocessed message to the inherited function, maybe it knows
+    what to do.  This includes replies to messages we sent ourselves. */
+    BApplication::MessageReceived (MessagePntr);
 }
 
 
-void ServerApp::PollNetworkLoop ()
+void ServerApp::PollNetwork ()
 {
   if (m_VNCServerPntr == NULL)
     return;
@@ -235,51 +229,72 @@ void ServerApp::PollNetworkLoop ()
   {
     fd_set         rfds;
     struct timeval tv;
-    
-    while (!m_NetworkMonitorSuicideDesired)
-    {
-      // Do at most 100 updates per second, more is useless since the screen
-      // refresh rate and Human eye aren't that fast.  Since the screen copying
-      // code is aiming at 50 updates per second, it has 1/100 of a second to
-      // do its work (most of the time that means looking at a small patch of
-      // the screen and noticing that it hasn't changed), plus the 1/100 second
-      // delay here to let the computer do other work.
 
-      tv.tv_sec = 0;
-      tv.tv_usec = 5000; // Time delay in millionths of a second.
-  
-      FD_ZERO(&rfds);
-      FD_SET(m_TcpListenerPntr->getFd(), &rfds);
-  
-      std::list<network::Socket*> sockets;
-      m_VNCServerPntr->getSockets(&sockets);
-      std::list<network::Socket*>::iterator iter;
-      for (iter = sockets.begin(); iter != sockets.end(); iter++)
-        FD_SET((*iter)->getFd(), &rfds);
-  
-      int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
-      if (n < 0) throw rdr::SystemException("select",errno);
-  
-      for (iter = sockets.begin(); iter != sockets.end(); iter++) {
-        if (FD_ISSET((*iter)->getFd(), &rfds)) {
-          m_VNCServerPntr->processSocketEvent(*iter);
-        }
+    tv.tv_sec = 0;
+    tv.tv_usec = 5000; // Time delay in millionths of a second, keep short.
+
+    FD_ZERO(&rfds);
+    FD_SET(m_TcpListenerPntr->getFd(), &rfds);
+
+    std::list<network::Socket*> sockets;
+    m_VNCServerPntr->getSockets(&sockets);
+    std::list<network::Socket*>::iterator iter;
+    for (iter = sockets.begin(); iter != sockets.end(); iter++)
+      FD_SET((*iter)->getFd(), &rfds);
+
+    int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
+    if (n < 0) throw rdr::SystemException("select",errno);
+
+    for (iter = sockets.begin(); iter != sockets.end(); iter++) {
+      if (FD_ISSET((*iter)->getFd(), &rfds)) {
+        m_VNCServerPntr->processSocketEvent(*iter);
       }
-  
-      if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
-        network::Socket* sock = m_TcpListenerPntr->accept();
-        m_VNCServerPntr->addClient(sock);
-      }
-  
-      m_VNCServerPntr->checkTimeouts();
-  
-      if (m_VNCServerPntr->clientsReadyForUpdate ())
-        m_FakeDesktopPntr->BackgroundScreenUpdateCheck ();
     }
+
+    if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
+      network::Socket* sock = m_TcpListenerPntr->accept();
+      m_VNCServerPntr->addClient(sock);
+    }
+
+    m_VNCServerPntr->checkTimeouts();
+
+    // Run the background scan of the screen for changes, but only when an
+    // update is requested.  Otherwise the update timing feedback system won't
+    // work correctly (bursts of ridiculously high frame rates when the client
+    // isn't asking for a new update).
+
+    if (m_VNCServerPntr->clientsReadyForUpdate ())
+      m_FakeDesktopPntr->BackgroundScreenUpdateCheck ();
+
+    // Trigger the next update pretty much immediately, after other intervening
+    // messages have been processed.
+
+    PostMessage (MSG_DO_POLLING_STEP);
+    m_TimeOfLastBackgroundUpdate = system_time ();
   }
   catch (rdr::Exception &e)
   {
     vlog.error(e.str());
+  }
+}
+
+
+void ServerApp::Pulse ()
+{
+  bigtime_t CurrentTime;
+
+  CurrentTime = system_time ();
+  if (CurrentTime - m_TimeOfLastBackgroundUpdate > 20000000)
+  {
+    // If it has been dead for a long time, either we have just started up, or
+    // it has actually died.
+
+    vlog.debug ("ServerApp::Pulse: Haven't done any processing in the "
+      "last %d seconds, starting up another BMessage loop.",
+      (CurrentTime - m_TimeOfLastBackgroundUpdate) / 1000000);
+
+    m_TimeOfLastBackgroundUpdate = CurrentTime; // Avoid double messages.
+    PostMessage (MSG_DO_POLLING_STEP);
   }
 }
 
@@ -289,21 +304,6 @@ void ServerApp::PollNetworkLoop ()
 bool ServerApp::QuitRequested ()
 {
   return BApplication::QuitRequested ();
-}
-
-
-/* A helper function for starting a separate thread for polling the network.
-The unspecified pointer argument is actually a pointer to the ServerApp to use
-when calling the member function PollNetworkLoop(). */
-
-int32 PollNetworkInit (void *PassedInData)
-{
-  ServerApp *ServerAppPntr;
-
-  ServerAppPntr = (ServerApp *) PassedInData;
-  ServerAppPntr->PollNetworkLoop ();
-  ServerAppPntr->m_NetworkMonitorThreadID = -1;
-  return B_OK; // Return code of thread.
 }
 
 
@@ -324,12 +324,7 @@ void ServerApp::ReadyToRun ()
     m_TcpListenerPntr = new network::TcpListener ((int)port_number);
     vlog.info("Listening on port %d", (int)port_number);
 
-    m_NetworkMonitorThreadID = spawn_thread (PollNetworkInit,
-      "VNCPollNetwork", B_NORMAL_PRIORITY, this);
-    if (m_NetworkMonitorThreadID < 0)
-      throw rfb::Exception ("ServerApp::ReadyToRun: "
-        "Unable to create network polling thread.");
-    resume_thread (m_NetworkMonitorThreadID); // Start the thread running.
+    SetPulseRate (3000000); // Deadman timer checks every 3 seconds.
   }
   catch (rdr::Exception &e)
   {
@@ -337,7 +332,6 @@ void ServerApp::ReadyToRun ()
     PostMessage (B_QUIT_REQUESTED);
   }
 }
-
 
 
 // Display the program usage info, then terminate the program.
@@ -376,7 +370,8 @@ int main (int argc, char** argv)
 
   try {
     rfb::initStdIOLoggers();
-    rfb::LogWriter::setLogParams("*:stderr:1000"); // Normal level is 30.
+    rfb::LogWriter::setLogParams("*:stderr:1000");
+      // Normal level is 30, use 1000 for debug messages.
 
     // Override the default parameters with new values from the command line.
     // Display the usage message and exit the program if an unknown parameter
