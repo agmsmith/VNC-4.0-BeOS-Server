@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.13 2004/11/27 22:53:59 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.14 2004/11/28 00:22:11 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.14  2004/11/28 00:22:11  agmsmith
+ * Also show frame rate.
+ *
  * Revision 1.13  2004/11/27 22:53:59  agmsmith
  * Changed update technique to scan a small part of the screen each time
  * so that big updates don't slow down the interactivity by being big.
@@ -402,13 +405,13 @@ SDesktopBeOS::SDesktopBeOS () :
 
 SDesktopBeOS::~SDesktopBeOS ()
 {
-  delete m_FrameBufferBeOSPntr;
-  m_FrameBufferBeOSPntr = NULL;
-
   free (m_KeyCharStrings);
   m_KeyCharStrings = NULL;
   free (m_KeyMapPntr);
   m_KeyMapPntr = NULL;
+
+  delete m_FrameBufferBeOSPntr;
+  m_FrameBufferBeOSPntr = NULL;
 
   delete m_InputDeviceKeyboardPntr;
   m_InputDeviceKeyboardPntr = NULL;
@@ -474,7 +477,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
   }
 
   // Mark the current work unit of scan lines as needing an update.
-  
+
   RectangleToUpdate.setXYWH (0, m_BackgroundNextScanLineY,
     Width, m_BackgroundNumberOfScanLinesPerUpdate);
   if (RectangleToUpdate.br.y > Height)
@@ -658,7 +661,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     // The rest of the keys have an equivalent UTF-8 character.  Convert the
     // key code into a UTF-8 character, which will later be used to determine
     // which keys to press.
-  
+
     KeyToUTF8SearchData.vncKeyCode = key;
     KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
       &KeyToUTF8SearchData,
@@ -812,7 +815,7 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
     m_InputDeviceMousePntr->Control ('ViNC', &EventMessage);
     EventMessage.MakeEmpty ();
 
-    // Also request a screen update later on for the area around the mouse 
+    // Also request a screen update later on for the area around the mouse
     // coordinates.  That way moving the mouse around will update the screen
     // under the mouse pointer.  Same for clicking, since that often brings up
     // menus which need to be made visible.
@@ -866,10 +869,11 @@ void SDesktopBeOS::SendScreenUpdateData ()
 {
   rfb::PixelFormat NewScreenFormat;
   rfb::PixelFormat OldScreenFormat;
+  unsigned int     ScreenFormatSerialNumber;
 
   if (m_FrameBufferBeOSPntr != NULL)
   {
-    m_FrameBufferBeOSPntr->LockFrameBuffer ();
+    ScreenFormatSerialNumber = m_FrameBufferBeOSPntr->LockFrameBuffer ();
 
     try
     {
@@ -877,7 +881,14 @@ void SDesktopBeOS::SendScreenUpdateData ()
       // server about the change.
 
       OldScreenFormat = m_FrameBufferBeOSPntr->getPF ();
-      m_FrameBufferBeOSPntr->UpdatePixelFormatEtc ();
+
+      if (m_FrameBufferBeOSPntr->UpdatePixelFormatEtc () !=
+      ScreenFormatSerialNumber)
+        vlog.debug ("SDesktopBeOS::SendScreenUpdateData: "
+        "Screen pixel format serial number has changed unexpectedly!  "
+        "Possibly a bug in the OS where it changes the screen memory "
+        "pointer, ignoring our lock.");
+
       NewScreenFormat = m_FrameBufferBeOSPntr->getPF ();
       if (!NewScreenFormat.equal(OldScreenFormat))
         m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
@@ -893,6 +904,7 @@ void SDesktopBeOS::SendScreenUpdateData ()
       m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
       throw;
     }
+
     m_FrameBufferBeOSPntr->UnlockFrameBuffer ();
   }
 }
