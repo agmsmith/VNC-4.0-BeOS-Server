@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.11 2004/11/27 22:53:12 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.12 2004/12/05 23:40:04 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.12  2004/12/05 23:40:04  agmsmith
+ * Change timing system to use the event loop rather than a
+ * separate thread.  Didn't fix the memory crash bug when
+ * switching screen resolution - so it's not stack size or
+ * multithreading.
+ *
  * Revision 1.11  2004/11/27 22:53:12  agmsmith
  * Oops, forgot about the network time delay for new data.  Make it shorter
  * so that the overall update loop is faster.
@@ -105,7 +111,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0b4\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.11 2004/11/27 22:53:12 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.12 2004/12/05 23:40:04 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -281,19 +287,10 @@ void ServerApp::PollNetwork ()
 
 void ServerApp::Pulse ()
 {
-  bigtime_t CurrentTime;
-
-  CurrentTime = system_time ();
-  if (CurrentTime - m_TimeOfLastBackgroundUpdate > 20000000)
+  if (m_TimeOfLastBackgroundUpdate == 0)
   {
-    // If it has been dead for a long time, either we have just started up, or
-    // it has actually died.
-
-    vlog.debug ("ServerApp::Pulse: Haven't done any processing in the "
-      "last %d seconds, starting up another BMessage loop.",
-      (CurrentTime - m_TimeOfLastBackgroundUpdate) / 1000000);
-
-    m_TimeOfLastBackgroundUpdate = CurrentTime; // Avoid double messages.
+    vlog.debug ("ServerApp::Pulse: Starting up the BMessage timing cycle.");
+    m_TimeOfLastBackgroundUpdate = system_time ();
     PostMessage (MSG_DO_POLLING_STEP);
   }
 }
