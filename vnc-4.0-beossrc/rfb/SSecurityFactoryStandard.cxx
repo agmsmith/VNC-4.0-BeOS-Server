@@ -27,7 +27,6 @@
 #include <rfb/SSecurityFactoryStandard.h>
 
 // BeOS include files.
-#include <Directory.h>
 #include <FindDirectory.h>
 #include <Path.h>
 
