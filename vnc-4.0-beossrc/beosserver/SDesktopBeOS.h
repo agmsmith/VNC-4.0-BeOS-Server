@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.2 2004/02/08 21:13:34 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0b4-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.1 2004/06/07 01:07:28 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -26,7 +26,9 @@
  * this software; if not, write to the Free Software Foundation, Inc., 59
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * $Log: FrameBufferBeOS.h,v $
+ * $Log: SDesktopBeOS.h,v $
+ * Revision 1.1  2004/06/07 01:07:28  agmsmith
+ * Initial revision
  */
 
 
@@ -62,15 +64,47 @@ public:
     // whether there are clients ready at any time by calling the VNCServer's
     // clientsReadyForUpdate() method.
 
+  void forcedUpdateCheck ();
+    // Checks if it is time for a forced update, and does it if needed.  This
+    // gets called periodically by the server.
+
   virtual rfb::Point getFbSize ();
     // getFbSize() returns the current dimensions of the framebuffer.
     // This can be called even while the SDesktop is not start()ed.
+
+  virtual void pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask);
+    // The remote user has moved the mouse or clicked a button.
+
+  virtual void keyEvent (rdr::U32 key, bool down);
+    // The remote user has pressed a key.
 
 protected:
   class FrameBufferBeOS *m_FrameBufferBeOSPntr;
     // Our FrameBufferBeOS instance and the associated BDirectWindowReader
     // (which may or may not exist) which is used for accessing the frame
     // buffer.  NULL if it hasn't been created.
+
+  BInputDevice *m_InputDeviceKeyboardPntr;
+  BInputDevice *m_InputDeviceMousePntr;
+    // Gives access to our Input Server add-on which lets us inject mouse and
+    // keyboard event messages.  NULL if the connection isn't open or isn't
+    // available.  Connected when the desktop starts, disconnected when it
+    // stops.
+
+  rdr::U8 m_LastMouseButtonState;
+    // The mouse buttons from the last remote mouse update.  Needed since
+    // we have to convert the mouse events into up, down and moved events.
+
+  float m_LastMouseX;
+  float m_LastMouseY;
+    // Last absolute (0.0 to 1.0) mouse position reported to BeOS.  Needed so
+    // that we can avoid sending redundant mouse moved messages, particularly
+    // if the user is moving the mouse wheel or just pressing buttons.
+
+  bigtime_t m_NextForcedUpdateTime;
+    // When the system clock reaches this time, do a full screen refresh.
+    // Needed to awaken dead clients, that seem to stop updating once a button
+    // is pressed.  It is normally some time in the future.
 
   rfb::VNCServer *m_ServerPntr;
     // Identifies our server, which we can tell about our frame buffer and
