@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.15 2004/12/02 02:24:28 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.16 2004/12/13 03:57:37 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.16  2004/12/13 03:57:37  agmsmith
+ * Combined functions for doing background update with grabbing the
+ * screen memory.  Also limit update size to at least 4 scan lines.
+ *
  * Revision 1.15  2004/12/02 02:24:28  agmsmith
  * Check for buggy operating systems which might allow the screen to
  * change memory addresses even while it is locked.
@@ -608,10 +612,18 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     case XK_Num_Lock: ChangedModifiers = B_NUM_LOCK; break;
     case XK_Shift_L: ChangedModifiers = B_LEFT_SHIFT_KEY; break;
     case XK_Shift_R: ChangedModifiers = B_RIGHT_SHIFT_KEY; break;
-    case XK_Control_L: ChangedModifiers = B_LEFT_CONTROL_KEY; break;
-    case XK_Control_R: ChangedModifiers = B_RIGHT_CONTROL_KEY; break;
-    case XK_Alt_L: ChangedModifiers = B_LEFT_COMMAND_KEY; break;
-    case XK_Alt_R: ChangedModifiers = B_RIGHT_COMMAND_KEY; break;
+    case XK_Control_L: ChangedModifiers = // Are alt/control swapped?
+      ((m_KeyMapPntr->left_control_key == 92 /* usual control key is 92 */) ?
+      B_LEFT_CONTROL_KEY : B_LEFT_COMMAND_KEY); break;
+    case XK_Control_R: ChangedModifiers =
+      ((m_KeyMapPntr->left_control_key == 92) ?
+      B_RIGHT_CONTROL_KEY : B_RIGHT_COMMAND_KEY); break;
+    case XK_Alt_L: ChangedModifiers =
+      ((m_KeyMapPntr->left_control_key == 92) ?
+      B_LEFT_COMMAND_KEY : B_LEFT_CONTROL_KEY); break;
+    case XK_Alt_R: ChangedModifiers =
+      ((m_KeyMapPntr->left_control_key == 92) ?
+      B_RIGHT_COMMAND_KEY : B_RIGHT_CONTROL_KEY); break;
     case XK_Meta_L: ChangedModifiers = B_LEFT_OPTION_KEY; break;
     case XK_Meta_R: ChangedModifiers = B_RIGHT_OPTION_KEY; break;
     default: ChangedModifiers = 0;
