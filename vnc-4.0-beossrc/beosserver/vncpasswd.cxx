@@ -30,6 +30,7 @@
 #include <Path.h>
 
 // Hack for BeOS, add a getpass function.  AGMS.
+// $Header: $
 
 char *getpass (const char *Prompt)
 {
@@ -38,6 +39,7 @@ char *getpass (const char *Prompt)
 
   fprintf (stderr, "%s", Prompt);
   fflush (stderr);
+  memset (Password, 0, sizeof (Password));
   fgets (Password, sizeof (Password), stdin);
   i = strlen (Password);
   if (i > 0 && Password[i-1] == '\n')
@@ -71,7 +73,7 @@ char* prog;
 
 static void usage()
 {
-  fprintf(stderr,"usage: %s [file]\n",prog);
+  fprintf(stderr,"usage: %s [-pPassword] [file]\n",prog);
   exit(1);
 }
 
@@ -80,9 +82,16 @@ int main(int argc, char** argv)
   prog = argv[0];
 
   const char* fname = 0;
+  char* passwordString = 0;
+  char  storageString [9]; // Max password length is 8 characters.
 
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-q") == 0) { // allowed for backwards compatibility
+    } else if (argv[i][0] == '-' && argv[i][1] == 'p') {
+      memset (storageString, 0, sizeof (storageString));
+      strncpy (storageString, argv[i] + 2, sizeof (storageString));
+      storageString [sizeof (storageString) - 1] = 0;
+      passwordString = storageString;
     } else if (argv[i][0] == '-') {
       usage();
     } else if (!fname) {
@@ -100,60 +109,70 @@ int main(int argc, char** argv)
     create_directory (Path.Path(), 0755);
   }
 
-  while (true) {
-    char* passwd = getpass("Password: ");
-    if (!passwd) {
-      perror("getpass error");
-      exit(1);
-    }
-    if (strlen(passwd) < 6) {
-      if (strlen(passwd) == 0) {
-        fprintf(stderr,"Password not changed\n");
+  if (passwordString == 0)
+  {
+    // Get the password from the command line user.
+    while (true) {
+      char* passwd;
+      passwd = getpass("Password: ");
+      if (!passwd) {
+        perror("getpass error");
         exit(1);
       }
-      fprintf(stderr,"Password must be at least 6 characters - try again\n");
-      continue;
+      if (strlen(passwd) < 6) {
+        if (strlen(passwd) == 0) {
+          fprintf(stderr,"Password not changed\n");
+          exit(1);
+        }
+        fprintf(stderr,"Password must be at least 6 characters - try again\n");
+        continue;
+      }
+
+      if (strlen(passwd) > 8) {
+        passwd[8] = '\0';
+        fprintf(stderr,"Note that the password has been truncated down to the maximum 8 characters\n");
+      }
+
+      CharArray passwdCopy(strDup(passwd));
+
+      passwd = getpass("Verify: ");
+      if (!passwd) {
+        perror("getpass error");
+        exit(1);
+      }
+      if (strlen(passwd) > 8)
+        passwd[8] = '\0';
+
+      if (strcmp(passwdCopy.buf, passwd) != 0) {
+        fprintf(stderr,"Passwords don't match - try again\n");
+        continue;
+      }
+      passwordString = passwd;
+      break;
     }
-
-    if (strlen(passwd) > 8) {
-      passwd[8] = '\0';
-      fprintf(stderr,"Note that the password has been truncated down to the maximum 8 characters\n");
-    }
-
-    CharArray passwdCopy(strDup(passwd));
-
-    passwd = getpass("Verify: ");
-    if (!passwd) {
-      perror("getpass error");
-      exit(1);
-    }
-    if (strlen(passwd) > 8)
-      passwd[8] = '\0';
-
-    if (strcmp(passwdCopy.buf, passwd) != 0) {
-      fprintf(stderr,"Passwords don't match - try again\n");
-      continue;
-    }
-
-    FILE* fp = fopen(fname,"w");
-    if (!fp) {
-      fprintf(stderr,"Couldn't open %s for writing\n",fname);
-      exit(1);
-    }
-    chmod(fname, S_IRUSR|S_IWUSR);
-
-    vncAuthObfuscatePasswd(passwd);
-
-    if (fwrite(passwd, 8, 1, fp) != 1) {
-      fprintf(stderr,"Writing to %s failed\n",fname);
-      exit(1);
-    }
-
-    fclose(fp);
-
-    for (unsigned int i = 0; i < strlen(passwd); i++)
-      passwd[i] = passwdCopy.buf[i] = 0;
-
-    return 0;
   }
+
+  if (strlen (passwordString) < 6)
+  {
+    fprintf(stderr,"Password must be at least 6 characters.\n");
+    exit (1);
+  }
+
+  FILE* fp = fopen(fname,"w");
+  if (!fp) {
+    fprintf(stderr,"Couldn't open %s for writing\n",fname);
+    exit(1);
+  }
+  chmod(fname, S_IRUSR|S_IWUSR);
+
+  vncAuthObfuscatePasswd(passwordString);
+
+  if (fwrite(passwordString, 8, 1, fp) != 1) {
+    fprintf(stderr,"Writing to %s failed\n",fname);
+    exit(1);
+  }
+
+  fclose(fp);
+
+  return 0;
 }
