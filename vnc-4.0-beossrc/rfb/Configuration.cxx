@@ -117,7 +117,7 @@ void Configuration::listParams(int width, int nameWidth) {
   while (current) {
     char* def_str = current->getDefaultStr();
     const char* desc = current->getDescription();
-    fprintf(stderr,"  %-*s -", nameWidth, current->getName());
+    fprintf(stdout,"  %-*s -", nameWidth, current->getName());
     int column = strlen(current->getName());
     if (column < nameWidth) column = nameWidth;
     column += 4;
@@ -128,10 +128,10 @@ void Configuration::listParams(int width, int nameWidth) {
       else wordLen = strlen(desc);
 
       if (column + wordLen + 1 > width) {
-        fprintf(stderr,"\n%*s",nameWidth+4,"");
+        fprintf(stdout,"\n%*s",nameWidth+4,"");
         column = nameWidth+4;
       }
-      fprintf(stderr," %.*s",wordLen,desc);
+      fprintf(stdout," %.*s",wordLen,desc);
       column += wordLen + 1;
       desc += wordLen + 1;
       if (!s) break;
@@ -139,11 +139,11 @@ void Configuration::listParams(int width, int nameWidth) {
 
     if (def_str) {
       if (column + (int)strlen(def_str) + 11 > width)
-        fprintf(stderr,"\n%*s",nameWidth+4,"");
-      fprintf(stderr," (default=%s)\n",def_str);
+        fprintf(stdout,"\n%*s",nameWidth+4,"");
+      fprintf(stdout," (default=%s)\n",def_str);
       strFree(def_str);
     } else {
-      fprintf(stderr,"\n");
+      fprintf(stdout,"\n");
     }
     current = current->_next;
   }
@@ -316,7 +316,7 @@ StringParameter::StringParameter(const char* name_, const char* desc_,
   : VoidParameter(name_, desc_), value(strDup(v)), def_value(v)
 {
   if (!v) {
-    fprintf(stderr,"Default value <null> for %s not allowed\n",name_);
+    fprintf(stdout,"Default value <null> for %s not allowed\n",name_);
     throw rfb::Exception("Default value <null> not allowed");
   }
 }
