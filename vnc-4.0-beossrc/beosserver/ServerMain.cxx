@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.18 2005/02/14 02:29:56 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.19 2005/05/30 00:40:05 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.19  2005/05/30 00:40:05  agmsmith
+ * Changed output to use stdout for compatibility with the GUI shell.
+ *
  * Revision 1.18  2005/02/14 02:29:56  agmsmith
  * Removed unused parameters - HTTP servers and host wildcards.
  *
@@ -131,9 +134,9 @@ static const char *g_AppSignature =
   "application/x-vnd.agmsmith.vncserver";
 
 static const char *g_AboutText =
-  "VNC Server for BeOS, based on VNC 4.0, from RealVNC http://www.realvnc.com/\n"
+  "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.18 2005/02/14 02:29:56 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.19 2005/05/30 00:40:05 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
