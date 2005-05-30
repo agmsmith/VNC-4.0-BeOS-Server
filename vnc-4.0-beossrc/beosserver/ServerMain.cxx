@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.17 2005/02/13 01:28:44 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.18 2005/02/14 02:29:56 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.18  2005/02/14 02:29:56  agmsmith
+ * Removed unused parameters - HTTP servers and host wildcards.
+ *
  * Revision 1.17  2005/02/13 01:28:44  agmsmith
  * Now notices clipboard changes and informs all the clients
  * about the new text contents.
@@ -128,9 +131,9 @@ static const char *g_AppSignature =
   "application/x-vnd.agmsmith.vncserver";
 
 static const char *g_AboutText =
-  "VNC Server for BeOS, based on VNC 4.0\n"
+  "VNC Server for BeOS, based on VNC 4.0, from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.17 2005/02/13 01:28:44 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.18 2005/02/14 02:29:56 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -371,9 +374,9 @@ void ServerApp::ReadyToRun ()
 
 static void usage (const char *programName)
 {
-  fprintf(stderr, g_AboutText);
-  fprintf(stderr, "\n\nusage: %s [<parameters>]\n", programName);
-  fprintf(stderr,"\n"
+  fprintf(stdout, g_AboutText);
+  fprintf(stdout, "\n\nusage: %s [<parameters>]\n", programName);
+  fprintf(stdout,"\n"
     "Parameters can be turned on with -<param> or off with -<param>=0\n"
     "Parameters which take a value can be specified as "
     "-<param> <value>\n"
@@ -403,7 +406,7 @@ int main (int argc, char** argv)
 
   try {
     rfb::initStdIOLoggers();
-    rfb::LogWriter::setLogParams("*:stderr:1000");
+    rfb::LogWriter::setLogParams("*:stdout:30");
       // Normal level is 30, use 1000 for debug messages.
 
     // Override the default parameters with new values from the command line.
