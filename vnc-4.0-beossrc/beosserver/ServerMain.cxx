@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.19 2005/05/30 00:40:05 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.20 2005/05/30 00:41:35 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.20  2005/05/30 00:41:35  agmsmith
+ * Punctuation.
+ *
  * Revision 1.19  2005/05/30 00:40:05  agmsmith
  * Changed output to use stdout for compatibility with the GUI shell.
  *
@@ -136,7 +139,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.19 2005/05/30 00:40:05 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.20 2005/05/30 00:41:35 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static rfb::LogWriter vlog("ServerMain");
@@ -155,8 +158,8 @@ static rfb::VncAuthPasswdFileParameter vncAuthPasswd;
 /******************************************************************************
  * ServerApp is the top level class for this program.  This handles messages
  * from the outside world and does some of the processing.  It also has
- * pointers to important data structures, like the VNC server stuff, or the
- * desktop (screen buffer access thing).
+ * pointers to important data structures, like the VNC server stuff, or
+ * the desktop (screen buffer access thing).
  */
 
 class ServerApp : public BApplication
