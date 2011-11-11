@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.24 2005/02/13 01:42:05 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.25 2005/02/14 02:31:01 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.25  2005/02/14 02:31:01  agmsmith
+ * Added an option to turn off various screen scanning methods,
+ * and an option and code to draw a cursor in the outgoing data.
+ *
  * Revision 1.24  2005/02/13 01:42:05  agmsmith
  * Can now receive clipboard text from the remote clients and
  * put it on the BeOS clipboard.
@@ -935,6 +939,27 @@ void SDesktopBeOS::MakeCheapCursor (void)
   if (m_FrameBufferBeOSPntr == NULL || m_ServerPntr == NULL)
     return;
 
+#define BIG_CURSOR 1
+#if BIG_CURSOR
+  static unsigned short CrossMask [15 /* Our cursor is 15 rows tall */] =
+  { // A one bit per pixel transparency mask, high bit is first one in second byte.
+    0x8003, // 0000 0011 1000 0000
+    0x8003, // 0000 0011 1000 0000
+    0x8003, // 0000 0011 1000 0000
+    0x8003, // 0000 0011 1000 0000
+    0x0001, // 0000 0001 0000 0000
+    0x0001, // 0000 0001 0000 0000
+    0x1EF1, // 1111 0001 0001 1110
+    0xFEFE, // 1111 1110 1111 1110
+    0x1EF1, // 1111 0001 0001 1110
+    0x0001, // 0000 0001 0000 0000
+    0x0001, // 0000 0001 0000 0000
+    0x8003, // 0000 0011 1000 0000
+    0x8003, // 0000 0011 1000 0000
+    0x8003, // 0000 0011 1000 0000
+    0x8003, // 0000 0011 1000 0000
+  };
+#else
   static unsigned char CrossMask [7 /* Our cursor is 7 rows tall */] =
   { // A one bit per pixel transparency mask, high bit first in each byte.
     0x10, // 00010000
@@ -945,11 +970,19 @@ void SDesktopBeOS::MakeCheapCursor (void)
     0x10, // 00010000
     0x10, // 00010000
   };
+#endif
 
   rfb::Pixel         Black;
+  rfb::Pixel         Blue;
   rfb::Pixel         White;
   rfb::Rect          Rectangle;
-  rfb::ManagedPixelBuffer CursorBitmap (m_FrameBufferBeOSPntr->getPF (), 7, 7);
+
+  rfb::ManagedPixelBuffer CursorBitmap (m_FrameBufferBeOSPntr->getPF (),
+#if BIG_CURSOR
+   15, 15);
+#else
+   7, 7);
+#endif
 
   Black = m_FrameBufferBeOSPntr->getPF().pixelFromRGB (
     (rdr::U16) 0, (rdr::U16) 0, (rdr::U16) 0,
@@ -957,17 +990,38 @@ void SDesktopBeOS::MakeCheapCursor (void)
   White = m_FrameBufferBeOSPntr->getPF().pixelFromRGB (
     (rdr::U16) 0xFFFF, (rdr::U16) 0xFFFF, (rdr::U16) 0xFFFF,
     m_FrameBufferBeOSPntr->getColourMap());
+  Blue = m_FrameBufferBeOSPntr->getPF().pixelFromRGB (
+    (rdr::U16) 0x4000, (rdr::U16) 0x4000, (rdr::U16) 0xFFFF,
+    m_FrameBufferBeOSPntr->getColourMap());
 
-  // Draw a cross.
+  // Fill in the colours underlying the cursor shape.
+#if BIG_CURSOR
+  Rectangle.setXYWH (0, 0, 15, 15);
+  CursorBitmap.fillRect (Rectangle, White);
+  Rectangle.setXYWH (6, 0, 3, 15);
+  CursorBitmap.fillRect (Rectangle, Blue);
+  Rectangle.setXYWH (0, 6, 15, 3);
+  CursorBitmap.fillRect (Rectangle, Blue);
+  Rectangle.setXYWH (7, 0, 1, 15);
+  CursorBitmap.fillRect (Rectangle, Black);
+  Rectangle.setXYWH (0, 7, 15, 1);
+  CursorBitmap.fillRect (Rectangle, Black);
+#else
   Rectangle.setXYWH (0, 0, 7, 7);
   CursorBitmap.fillRect (Rectangle, White);
   Rectangle.setXYWH (3, 0, 1, 7);
   CursorBitmap.fillRect (Rectangle, Black);
   Rectangle.setXYWH (0, 3, 7, 1);
   CursorBitmap.fillRect (Rectangle, Black);
+#endif
 
   // Tell the server to use it.
-  m_ServerPntr->setCursor (/* x, y, hotx, hoty */ 7, 7, 3, 3,
+  m_ServerPntr->setCursor (
+#if BIG_CURSOR
+    15, 15, 7, 7, /* x, y, hotx, hoty */
+#else
+    7, 7, 3, 3, /* x, y, hotx, hoty */
+#endif
     CursorBitmap.data, CrossMask);
 }
 
