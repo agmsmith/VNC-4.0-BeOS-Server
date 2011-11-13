@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.25 2005/02/14 02:31:01 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.26 2011/11/11 21:57:54 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.26  2011/11/11 21:57:54  agmsmith
+ * Changed the cheap cursor to be twice as big and have a bit of colour,
+ * so you can see it more easily on the iPad version of VNC.
+ *
  * Revision 1.25  2005/02/14 02:31:01  agmsmith
  * Added an option to turn off various screen scanning methods,
  * and an option and code to draw a cursor in the outgoing data.
@@ -186,9 +190,11 @@ static rfb::BoolParameter TryBScreen ("ScreenReaderBScreen",
 
 static rfb::BoolParameter ShowCheapCursor ("ShowCheapCursor",
   "If you want to see a marker on the screen where the mouse may be, turn on "
-  "this parameter.  It will draw a cross shape into the data being sent out.  "
-  "It's better if you instead use a client which draws the cursor.",
-  0);
+  "this parameter.  The shape (a blue/black/white cross large enough to be "
+  "visible on an iPad) gets sent to the client side, which will hopefully "
+  "display it instead of your usual mouse cursor or no cursor.  If there "
+  "was a way of getting the current BeOS cursor shape, we'd use that.",
+  1);
 
 
 static char UTF8_Backspace [] = {B_BACKSPACE, 0};
@@ -1006,6 +1012,14 @@ void SDesktopBeOS::MakeCheapCursor (void)
   CursorBitmap.fillRect (Rectangle, Black);
   Rectangle.setXYWH (0, 7, 15, 1);
   CursorBitmap.fillRect (Rectangle, Black);
+  Rectangle.setXYWH (7, 1, 1, 3);
+  CursorBitmap.fillRect (Rectangle, White);
+  Rectangle.setXYWH (7, 11, 1, 3);
+  CursorBitmap.fillRect (Rectangle, White);
+  Rectangle.setXYWH (1, 7, 3, 1);
+  CursorBitmap.fillRect (Rectangle, White);
+  Rectangle.setXYWH (11, 7, 3, 1);
+  CursorBitmap.fillRect (Rectangle, White);
 #else
   Rectangle.setXYWH (0, 0, 7, 7);
   CursorBitmap.fillRect (Rectangle, White);
