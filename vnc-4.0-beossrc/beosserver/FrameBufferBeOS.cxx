@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.14 2005/02/27 20:20:16 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.15 2005/02/27 20:25:05 agmsmith Exp $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.15  2005/02/27 20:25:05  agmsmith
+ * Needed a header file that PPC version auto-includes.
+ *
  * Revision 1.14  2005/02/27 20:20:16  agmsmith
  * Added a safer shutdown for the BDirectWindow window, crashed on PPC
  * when an external thread tried to close it.  Also added big-endian
@@ -306,6 +309,9 @@ void BDirectWindowReader::DirectConnected (
 
     case B_DIRECT_STOP:
       m_Connected = false;
+      break;
+
+    default:
       break;
    }
 
