@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.15 2005/02/27 20:25:05 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.16 2013/01/31 22:55:01 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.16  2013/01/31 22:55:01  agmsmith
+ * Add a default case for BDirect callbacks, just in case it sends us something new.
+ *
  * Revision 1.15  2005/02/27 20:25:05  agmsmith
  * Needed a header file that PPC version auto-includes.
  *
@@ -296,6 +299,23 @@ void BDirectWindowReader::DirectConnected (
   if (!m_Connected && m_DoNotConnect)
       return; // Shutting down or otherwise don't want to make a connection.
 
+  // For debugging purposes, measure the elapsed time to see if we're getting
+  // close to the 3 seconds maximum allowed by BeOS.  Could happen if we have
+  // to wait for a full screen to be transmitted.  Units of microseconds.
+
+  bigtime_t StartTime = system_time();
+
+  const char *OperationName;
+  switch (ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK)
+  {
+    case B_DIRECT_START: OperationName = "B_DIRECT_START"; break;
+    case B_DIRECT_STOP: OperationName = "B_DIRECT_STOP"; break;
+    case B_DIRECT_MODIFY: OperationName = "B_DIRECT_MODIFY"; break;
+    default: OperationName = "Unknown"; break;
+  }
+  vlog.debug ("BDirectWindowReader::DirectConnected doing %s #%d.",
+    OperationName, ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK);
+
   m_ConnectionLock.Lock ();
 
   switch (ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK)
@@ -303,8 +323,21 @@ void BDirectWindowReader::DirectConnected (
     case B_DIRECT_START:
       m_Connected = true;
     case B_DIRECT_MODIFY:
-      m_ConnectionVersion++;
-      m_SavedFrameBufferInfo = *ConnectionInfoPntr;
+      if (ConnectionInfoPntr == NULL || ConnectionInfoPntr->bits == NULL)
+      {
+        // After notifying us about a resolution change, Haiku does a second
+        // callback sometimes with NULL bitmap data and zero stride to signal
+        // that the first callback took too long.
+        vlog.error ("BDirectWindowReader::DirectConnected got a NULL "
+          "screen bitmap pointer, perhaps it took too long to finish with the "
+          "old screen so the OS killed us?");
+        m_Connected = false;
+      }
+      else
+      {
+        m_ConnectionVersion++;
+        m_SavedFrameBufferInfo = *ConnectionInfoPntr;
+      }
       break;
 
     case B_DIRECT_STOP:
@@ -313,9 +346,13 @@ void BDirectWindowReader::DirectConnected (
 
     default:
       break;
-   }
+  }
 
-   m_ConnectionLock.Unlock ();
+  m_ConnectionLock.Unlock ();
+
+  bigtime_t ElapsedTime = system_time() - StartTime;
+  vlog.debug ("BDirectWindowReader::DirectConnected took %ld microseconds.",
+    ElapsedTime);
 }
 
 
