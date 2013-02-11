@@ -1,11 +1,11 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.21 2007/01/23 02:41:59 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.22 2011/11/11 21:59:57 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
  * http://www.realvnc.com/), with BeOS adaptations by Alexander G. M. Smith.
  *
- * Copyright (C) 2004 by Alexander G. M. Smith.  All Rights Reserved.
+ * Copyright (C) 2004 by Alexander G. M. Smith.
  *
  * This is free software; you can redistribute it and/or modify it under the
  * terms of the GNU General Public License as published by the Free Software
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.22  2011/11/11 21:59:57  agmsmith
+ * Bumped version number for new bigger cheap cursor, for iPad viewability.
+ *
  * Revision 1.21  2007/01/23 02:41:59  agmsmith
  * No changes - just a recompile with the newer gcc that does better optimization.
  *
@@ -142,8 +145,12 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.21 2007/01/23 02:41:59 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.22 2011/11/11 21:59:57 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
+
+static const int k_DeadManPulseTimer = 3000000;
+  /* Time delay before the pulse timer checks that the main loop is still
+  running.  If not, it will create a new polling BeOS message. */
 
 static rfb::LogWriter vlog("ServerMain");
 
@@ -180,8 +187,22 @@ public: /* Constructor and destructor. */
 
   /* Our class methods. */
   void PollNetwork ();
+  void ShutDownNetwork();
 
 public: /* Member variables. */
+  enum NetStateEnum {NET_RESTARTING, NET_UP, NET_WENT_DOWN} m_BeOSNetworkState;
+    /* In BeOS the network subsystem can be manually restarted if it fails
+    (which it does often).  We have to close all sockets when it fails and then
+    try reopening everything periodically until it's working again.  The states
+    are:
+    NET_WENT_DOWN - Just went down.  Set when a fatal error is detected.  When
+      the polling loop notices this state, close everything and then move to
+      the NET_RESTARTING state.
+    NET_RESTARTING - After a brief delay (a few seconds), try opening sockets
+      and starting up the network.  If it works, move to NET_UP, otherwise move
+      to NET_WENT_DOWN.
+    NET_UP - Normal state, sockets are open and listening for connections. */
+
   SDesktopBeOS *m_FakeDesktopPntr;
     /* Provides access to the frame buffer, mouse, etc for VNC to use. */
 
@@ -208,6 +229,7 @@ public: /* Member variables. */
 
 ServerApp::ServerApp ()
 : BApplication (g_AppSignature),
+  m_BeOSNetworkState (NET_RESTARTING),
   m_FakeDesktopPntr (NULL),
   m_TimeOfLastBackgroundUpdate (0),
   m_TcpListenerPntr (NULL),
@@ -243,31 +265,42 @@ void ServerApp::AboutRequested ()
 
 void ServerApp::MessageReceived (BMessage *MessagePntr)
 {
-  if (MessagePntr->what == MSG_DO_POLLING_STEP)
-    PollNetwork ();
-  else if (MessagePntr->what == B_CLIPBOARD_CHANGED)
+  try
   {
-    BMessage   *ClipMsgPntr;
-    int32       TextLength;
-    const char *TextPntr;
-
-    if (m_VNCServerPntr != NULL && be_clipboard->Lock())
+    if (MessagePntr->what == MSG_DO_POLLING_STEP)
+      PollNetwork ();
+    else if (MessagePntr->what == B_CLIPBOARD_CHANGED)
     {
-      if ((ClipMsgPntr = be_clipboard->Data ()) != NULL)
+      BMessage   *ClipMsgPntr;
+      int32       TextLength;
+      const char *TextPntr;
+  
+      if (m_VNCServerPntr != NULL && be_clipboard->Lock())
       {
-        TextPntr = NULL;
-        ClipMsgPntr->FindData ("text/plain", B_MIME_TYPE,
-          (const void **) &TextPntr, &TextLength);
-        if (TextPntr != NULL)
-          m_VNCServerPntr->serverCutText (TextPntr, TextLength);
+        if ((ClipMsgPntr = be_clipboard->Data ()) != NULL)
+        {
+          TextPntr = NULL;
+          ClipMsgPntr->FindData ("text/plain", B_MIME_TYPE,
+            (const void **) &TextPntr, &TextLength);
+          if (TextPntr != NULL)
+            m_VNCServerPntr->serverCutText (TextPntr, TextLength);
+        }
+        be_clipboard->Unlock ();
       }
-      be_clipboard->Unlock ();
     }
+    else
+      /* Pass the unprocessed message to the inherited function, maybe it knows
+      what to do.  This includes replies to messages we sent ourselves. */
+      BApplication::MessageReceived (MessagePntr);
+
+  } catch (rdr::SystemException &s) {
+    vlog.error(s.str());
+  } catch (rdr::Exception &e) {
+    vlog.error(e.str());
+  } catch (...) {
+    vlog.error("Unknown or unhandled exception while processing a "
+      "BeOS message.");
   }
-  else
-    /* Pass the unprocessed message to the inherited function, maybe it knows
-    what to do.  This includes replies to messages we sent ourselves. */
-    BApplication::MessageReceived (MessagePntr);
 }
 
 
@@ -275,6 +308,27 @@ void ServerApp::PollNetwork ()
 {
   if (m_VNCServerPntr == NULL)
     return;
+
+  if (m_BeOSNetworkState == NET_RESTARTING)
+  {
+    vlog.debug("In state NET_RESTARTING.");
+
+    if (m_TcpListenerPntr != NULL)
+      delete m_TcpListenerPntr;
+    m_TcpListenerPntr = new network::TcpListener ((int)port_number);
+
+    vlog.info("Listening on port %d", (int)port_number);
+    m_BeOSNetworkState = NET_UP;
+    return;
+  }
+
+  if (m_BeOSNetworkState == NET_WENT_DOWN)
+  {
+    vlog.debug("In state NET_WENT_DOWN.");
+    ShutDownNetwork();
+    m_BeOSNetworkState = NET_RESTARTING;
+    return;
+  }
 
   try
   {
@@ -294,7 +348,7 @@ void ServerApp::PollNetwork ()
       FD_SET((*iter)->getFd(), &rfds);
 
     int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
-    if (n < 0) throw rdr::SystemException("select",errno);
+    if (n < 0) throw rdr::SystemException("select", errno);
 
     for (iter = sockets.begin(); iter != sockets.end(); iter++) {
       if (FD_ISSET((*iter)->getFd(), &rfds)) {
@@ -304,7 +358,8 @@ void ServerApp::PollNetwork ()
 
     if (FD_ISSET(m_TcpListenerPntr->getFd(), &rfds)) {
       network::Socket* sock = m_TcpListenerPntr->accept();
-      m_VNCServerPntr->addClient(sock);
+      if (sock != NULL) // NULL if it fails security checks.  Can throw too.
+        m_VNCServerPntr->addClient(sock);
     }
 
     m_VNCServerPntr->checkTimeouts();
@@ -318,23 +373,28 @@ void ServerApp::PollNetwork ()
       m_FakeDesktopPntr->BackgroundScreenUpdateCheck ();
 
     // Trigger the next update pretty much immediately, after other intervening
-    // messages have been processed.
+    // messages in the queue have been processed.
 
-    PostMessage (MSG_DO_POLLING_STEP);
     m_TimeOfLastBackgroundUpdate = system_time ();
+    PostMessage (MSG_DO_POLLING_STEP);
   }
   catch (rdr::Exception &e)
   {
     vlog.error(e.str());
+    m_BeOSNetworkState = NET_WENT_DOWN;
   }
 }
 
 
 void ServerApp::Pulse ()
 {
-  if (m_TimeOfLastBackgroundUpdate == 0)
+  bigtime_t ElapsedTime = system_time () - m_TimeOfLastBackgroundUpdate;
+
+  if (m_TimeOfLastBackgroundUpdate == 0 ||
+  ElapsedTime > (bigtime_t) (1.5 * k_DeadManPulseTimer))
   {
-    vlog.debug ("ServerApp::Pulse: Starting up the BMessage timing cycle.");
+    vlog.debug ("ServerApp::Pulse: Restarting the BMessage timing cycle "
+      "after %0.2f idle seconds.", ElapsedTime / 1000000.0);
     m_TimeOfLastBackgroundUpdate = system_time ();
     PostMessage (MSG_DO_POLLING_STEP);
   }
@@ -346,6 +406,7 @@ void ServerApp::Pulse ()
 bool ServerApp::QuitRequested ()
 {
   be_clipboard->StopWatching (be_app_messenger);
+  ShutDownNetwork();
   return BApplication::QuitRequested ();
 }
 
@@ -359,23 +420,54 @@ void ServerApp::ReadyToRun ()
     m_FakeDesktopPntr = new SDesktopBeOS ();
 
     m_VNCServerPntr = new rfb::VNCServerST ("MyBeOSVNCServer",
-      m_FakeDesktopPntr, NULL);
+      m_FakeDesktopPntr, NULL /* security factory */);
 
     m_FakeDesktopPntr->setServer (m_VNCServerPntr);
 
     network::TcpSocket::initTcpSockets();
-    m_TcpListenerPntr = new network::TcpListener ((int)port_number);
-    vlog.info("Listening on port %d", (int)port_number);
 
     be_clipboard->StartWatching (be_app_messenger);
 
-    SetPulseRate (3000000); // Deadman timer checks every 3 seconds.
+    SetPulseRate (k_DeadManPulseTimer); // Deadman timer checks occasionally.
   }
   catch (rdr::Exception &e)
   {
     vlog.error(e.str());
     PostMessage (B_QUIT_REQUESTED);
   }
+}
+
+
+void ServerApp::ShutDownNetwork()
+{
+  if (m_VNCServerPntr != NULL)
+  {
+    // Close all the clients.  This just sets a flag.
+    m_VNCServerPntr->closeClients("BeOS Network went down, "
+      "perhaps due to a NetServer restart or shutting down the program.");
+
+    // Do an update to actually close the clients attached to the dead
+    // sockets, also deletes the sockets.
+    std::list<network::Socket*> sockets;
+    m_VNCServerPntr->getSockets(&sockets);
+    std::list<network::Socket*>::iterator iter;
+    for (iter = sockets.begin(); iter != sockets.end(); iter++)
+        m_VNCServerPntr->processSocketEvent(*iter);
+  }
+
+  // Also close our listening for new connections socket.  That's all of the
+  // sockets that interact with the BeOS networking system.
+  if (m_TcpListenerPntr != NULL)
+  {
+    m_TcpListenerPntr->shutdown();
+    delete m_TcpListenerPntr;
+    m_TcpListenerPntr = NULL;
+  }
+
+  // Just in case someone cancelled shutdown, this will let it restart.
+  m_BeOSNetworkState = NET_WENT_DOWN;
+
+  vlog.debug("Successfully shut down the network.");
 }
 
 
@@ -409,14 +501,15 @@ int main (int argc, char** argv)
 
   if (MyApp.InitCheck () != B_OK)
   {
-    vlog.error("Unable to initialise BApplication.");
+    // Unable to initialise BApplication.  No error logging facilities yet.
     return -1;
   }
 
   try {
     rfb::initStdIOLoggers();
     rfb::LogWriter::setLogParams("*:stdout:30");
-      // Normal level is 30, use 1000 for debug messages.
+      // Normal level is 30, use 1000 for debug messages.  Or on the command
+      // line to see everything try: --log=*:stdout:1000
 
     // Override the default parameters with new values from the command line.
     // Display the usage message and exit the program if an unknown parameter
@@ -448,8 +541,11 @@ int main (int argc, char** argv)
   } catch (rdr::Exception &e) {
     vlog.error(e.str());
     ReturnCode = -1;
+  } catch (...) {
+    vlog.error("Unknown or unhandled exception detected at top level, "
+      "exiting.");
+    ReturnCode = -1;
   }
 
   return ReturnCode;
 }
-
