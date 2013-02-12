@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.17 2013/02/05 22:45:39 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.18 2013/02/12 22:18:33 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.18  2013/02/12 22:18:33  agmsmith
+ * Add a gradient bitmap for when no screen buffer is available,
+ * add a timeout to locking the frame buffer so that Haiku can
+ * work with its 0.5 second processing time limit.
+ *
  * Revision 1.17  2013/02/05 22:45:39  agmsmith
  * Added some debugging of the BDirect callbacks - duration and state.
  *
@@ -288,15 +293,16 @@ BDirectWindowReader::BDirectWindowReader (color_map *ColourMapPntr)
   memcpy (m_ColourMapPntr, ScreenInfo.ColorMap (), sizeof (*m_ColourMapPntr));
 
   // Set up a gradient gray scale one line bitmap for use when we can't display
-  // the screen.
+  // the screen.  In the BeOS colour palette, 0 to 31 are grays, 63 is white.
 
   int i;
   for (i = 0; i < 256; i++)
-    m_TechnicalProblemsPicture[i] = i;
+    m_TechnicalProblemsPicture[i] = i % 32;
   for (; i < (int) sizeof (m_TechnicalProblemsPicture) - 255; i++)
-    m_TechnicalProblemsPicture[i] = 255;
+    m_TechnicalProblemsPicture[i] = 63;
   for (; i < (int) sizeof (m_TechnicalProblemsPicture); i++)
-    m_TechnicalProblemsPicture[i] = sizeof(m_TechnicalProblemsPicture) - i - 1;
+    m_TechnicalProblemsPicture[i] =
+      (sizeof(m_TechnicalProblemsPicture) - i - 1) % 32;
 
   m_DoNotConnect = false; // Now ready for active operation.
 }
