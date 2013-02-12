@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.7 2005/02/06 23:24:33 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.8 2005/02/12 19:47:24 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.8  2005/02/12 19:47:24  agmsmith
+ * Moved the two different colour palette structures into the
+ * parent class and unified them.
+ *
  * Revision 1.7  2005/02/06 23:24:33  agmsmith
  * Added a generic status window feature so that even the
  * BScreen approach gets a status window.
@@ -90,15 +94,16 @@ public:
 
   virtual unsigned int LockFrameBuffer ();
   virtual void UnlockFrameBuffer ();
-    // Call these to lock the frame buffer so that none of the settings
-    // or data pointers change, then do your work, then unlock it.  All
-    // the other functions in this class assume you have locked the
-    // frame buffer if needed.  LockFrameBuffer returns the serial number
-    // of the current settings, which gets incremented if the OS changes
-    // screen resolution etc, so you can tell if you have to change things.
-    // Maximum lock time is 3 seconds, otherwise the OS might give up on
-    // the screen updates and render the bitmap pointer invalid.
-    // Default implementation does nothing, returns 0.
+    // Call these to lock the frame buffer so that none of the settings or data
+    // pointers change, then do your work, then unlock it.  All the other
+    // functions in this class assume you have locked the frame buffer if
+    // needed.  LockFrameBuffer returns the serial number of the current
+    // settings, which gets incremented if the OS changes screen resolution
+    // etc, so you can tell if you have to change things.  Maximum lock time is
+    // 3 seconds (0.5 in Haiku), otherwise the OS might give up on the screen
+    // updates and render the bitmap pointer invalid (Haiku sets it to NULL and
+    // ignores future window operations).  Default implementation does nothing,
+    // returns 0.
 
   virtual void SetDisplayMessage (const char *StringPntr);
     // Sets the little bit of text in the corner of the screen that shows

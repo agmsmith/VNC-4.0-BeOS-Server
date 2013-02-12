@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.27 2011/11/13 16:24:04 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.28 2013/02/12 18:59:11 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.28  2013/02/12 18:59:11  agmsmith
+ * Reduce priority of debug message for update size changes.
+ *
  * Revision 1.27  2011/11/13 16:24:04  agmsmith
  * Add a spot of white to the cursor.
  *
@@ -551,6 +554,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
     Height != m_FrameBufferBeOSPntr->height ())
     {
       // This will trigger a full screen update too, which takes a while.
+      vlog.debug("Screen resolution has changed, redrawing everything.");
       m_ServerPntr->setPixelBuffer (m_FrameBufferBeOSPntr);
       if (ShowCheapCursor)
         MakeCheapCursor ();

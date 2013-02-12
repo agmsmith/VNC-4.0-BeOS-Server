@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.16 2013/01/31 22:55:01 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.17 2013/02/05 22:45:39 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.17  2013/02/05 22:45:39  agmsmith
+ * Added some debugging of the BDirect callbacks - duration and state.
+ *
  * Revision 1.16  2013/01/31 22:55:01  agmsmith
  * Add a default case for BDirect callbacks, just in case it sends us something new.
  *
@@ -224,8 +227,8 @@ public:
   bool m_Connected;
     // TRUE if we are connected to the video memory, FALSE if not.  TRUE means
     // that video memory has been mapped into this process's address space and
-    // we have a valid pointer to the frame buffer.  Don't try reading from
-    // video memory if this is FALSE!
+    // we have a valid pointer to the frame buffer.  FALSE means we have a
+    // dummy bitmap standing in for the real display.
 
   unsigned int m_ConnectionVersion;
     // A counter that is bumped up by one every time the connection changes.
@@ -237,7 +240,8 @@ public:
     // resolution change and the resulting change in frame buffer address and
     // size) are mutually exclusive from other window operations (like reading
     // the frame buffer or destroying the window).  Maximum lock time is 3
-    // seconds, then the OS might kill the program for not responding.
+    // seconds (0.5 in Haiku), then the OS might kill the program for not
+    // responding.
 
   volatile bool m_DoNotConnect;
     // A flag that the destructor sets to tell the rest of the window code not
@@ -256,6 +260,11 @@ public:
 
 private:
   BDirectWindowReader (); // Default constructor shouldn't be used so hide it.
+
+  char m_TechnicalProblemsPicture[1024];
+    // When the screen is switching modes (the BDirectWindow temporarily isn't
+    // connected), we can't access the frame buffer and instead display this
+    // one line grayscale bitmap.  It's initialised to a gradient.
 };
 
 
@@ -277,6 +286,17 @@ BDirectWindowReader::BDirectWindowReader (color_map *ColourMapPntr)
   ResizeTo (80, 20); // A small window so it doesn't obscure the desktop.
 
   memcpy (m_ColourMapPntr, ScreenInfo.ColorMap (), sizeof (*m_ColourMapPntr));
+
+  // Set up a gradient gray scale one line bitmap for use when we can't display
+  // the screen.
+
+  int i;
+  for (i = 0; i < 256; i++)
+    m_TechnicalProblemsPicture[i] = i;
+  for (; i < (int) sizeof (m_TechnicalProblemsPicture) - 255; i++)
+    m_TechnicalProblemsPicture[i] = 255;
+  for (; i < (int) sizeof (m_TechnicalProblemsPicture); i++)
+    m_TechnicalProblemsPicture[i] = sizeof(m_TechnicalProblemsPicture) - i - 1;
 
   m_DoNotConnect = false; // Now ready for active operation.
 }
@@ -300,8 +320,9 @@ void BDirectWindowReader::DirectConnected (
       return; // Shutting down or otherwise don't want to make a connection.
 
   // For debugging purposes, measure the elapsed time to see if we're getting
-  // close to the 3 seconds maximum allowed by BeOS.  Could happen if we have
-  // to wait for a full screen to be transmitted.  Units of microseconds.
+  // close to the 3 seconds maximum allowed by BeOS or 0.5 seconds for Haiku.
+  // Could happen if we have to wait for a full screen to be transmitted.
+  // Units of microseconds.
 
   bigtime_t StartTime = system_time();
 
@@ -316,43 +337,59 @@ void BDirectWindowReader::DirectConnected (
   vlog.debug ("BDirectWindowReader::DirectConnected doing %s #%d.",
     OperationName, ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK);
 
-  m_ConnectionLock.Lock ();
+  // HaikuOS lets us wait for up to 0.5 seconds, BeOS 3.0 seconds, then they
+  // kill the program.  So don't wait too long, which can happen if a full
+  // screen is being delta compressed by VNC.  In that case, we just barge on
+  // ahead and hope that the changing values don't affect things too badly in
+  // the other thread.
+
+  status_t LockErrorCode;
+  LockErrorCode = m_ConnectionLock.LockWithTimeout(400000);
 
   switch (ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK)
   {
     case B_DIRECT_START:
       m_Connected = true;
+      m_ConnectionVersion++; // So it always triggers a check.
     case B_DIRECT_MODIFY:
-      if (ConnectionInfoPntr == NULL || ConnectionInfoPntr->bits == NULL)
+      if (memcmp (&m_SavedFrameBufferInfo, ConnectionInfoPntr,
+      sizeof (m_SavedFrameBufferInfo)) != 0)
       {
-        // After notifying us about a resolution change, Haiku does a second
-        // callback sometimes with NULL bitmap data and zero stride to signal
-        // that the first callback took too long.
-        vlog.error ("BDirectWindowReader::DirectConnected got a NULL "
-          "screen bitmap pointer, perhaps it took too long to finish with the "
-          "old screen so the OS killed us?");
-        m_Connected = false;
-      }
-      else
-      {
-        m_ConnectionVersion++;
+        m_ConnectionVersion++; // Trigger check only if changed.
         m_SavedFrameBufferInfo = *ConnectionInfoPntr;
       }
       break;
 
     case B_DIRECT_STOP:
       m_Connected = false;
+      m_ConnectionVersion++;
       break;
 
     default:
       break;
   }
 
-  m_ConnectionLock.Unlock ();
+  if (!m_Connected || m_SavedFrameBufferInfo.bits == NULL)
+  {
+    // Use our technical problems bitmap since the screen isn't available.
+    m_SavedFrameBufferInfo.bits = m_TechnicalProblemsPicture;
+    m_SavedFrameBufferInfo.bits_per_pixel = 8;
+    m_SavedFrameBufferInfo.bytes_per_row = 0; // Repeat the same row.
+    m_SavedFrameBufferInfo.pixel_format = B_GRAY8;
+    m_ScreenSize.Set(0.0, 0.0,
+      sizeof(m_TechnicalProblemsPicture)-1,
+      sizeof(m_TechnicalProblemsPicture)-1);
+  }
+
+  if (LockErrorCode == B_OK)
+    m_ConnectionLock.Unlock ();
 
   bigtime_t ElapsedTime = system_time() - StartTime;
-  vlog.debug ("BDirectWindowReader::DirectConnected took %ld microseconds.",
-    ElapsedTime);
+  vlog.debug ("BDirectWindowReader::DirectConnected took %0.3f seconds%s.",
+    ElapsedTime / 1000000.0, (LockErrorCode == B_OK) ? "" :
+    ", because locking took too long so we had to risk corruption and "
+    "skip it, otherwise Haiku would kill our program with it's puny 0.5 "
+    "second allowed time to finish processing the previous frame");
 }
 
 
