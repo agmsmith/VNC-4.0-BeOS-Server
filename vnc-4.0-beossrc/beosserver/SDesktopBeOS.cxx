@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.26 2011/11/11 21:57:54 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.27 2011/11/13 16:24:04 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -10,7 +10,7 @@
  * BeOS.  However, this static desktop is in charge - it creates the
  * FrameBufferBeOS, which in turn creates the BDirectWindowReader.
  *
- * Copyright (C) 2004 by Alexander G. M. Smith.  All Rights Reserved.
+ * Copyright (C) 2004 by Alexander G. M. Smith.
  *
  * This is free software; you can redistribute it and/or modify it under the
  * terms of the GNU General Public License as published by the Free Software
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.27  2011/11/13 16:24:04  agmsmith
+ * Add a spot of white to the cursor.
+ *
  * Revision 1.26  2011/11/11 21:57:54  agmsmith
  * Changed the cheap cursor to be twice as big and have a bit of colour,
  * so you can see it more easily on the iPad version of VNC.
@@ -616,7 +619,8 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
   if (OldUpdateSize != 0) // If a full screen update has been finished.
   {
     if (OldUpdateSize != m_BackgroundNumberOfScanLinesPerUpdate)
-      vlog.debug ("Background update size changed from %d to %d scan lines "
+      vlog.write(150 /* less important than debug level of 100 */,
+      "Background update size changed from %d to %d scan lines "
       "due to performance of %.4f updates per second in the previous full "
       "screen frame.  Last frame achieved %.3f frames per second.",
       OldUpdateSize, m_BackgroundNumberOfScanLinesPerUpdate,
