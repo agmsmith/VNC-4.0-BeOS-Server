@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.14 2005/02/13 01:42:05 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.15 2005/02/14 02:31:56 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.15  2005/02/14 02:31:56  agmsmith
+ * Fake cursor drawing code added.
+ *
  * Revision 1.14  2005/02/13 01:42:05  agmsmith
  * Can now receive clipboard text from the remote clients and
  * put it on the BeOS clipboard.
@@ -116,6 +119,12 @@ public:
     // see if any contain the given UTF-8 string.  Returns zero if it can't
     // find it.
 
+  const char* FindMappedSymbolFromKeycode (
+    int32 *MapOffsetArray, uint8 KeyCode);
+    // Looks up the symbol for a given keycode in a keymap.  Returns results
+    // copied to a temporary global string, so copy them elsewhere if you want
+    // to keep them.  Also not thread safe.
+
   virtual rfb::Point getFbSize ();
     // getFbSize() returns the current dimensions of the framebuffer.
     // This can be called even while the SDesktop is not start()ed.
@@ -131,6 +140,14 @@ public:
 
   virtual void pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask);
     // The remote user has moved the mouse or clicked a button.
+
+  void SendMappedKeyMessage (uint8 KeyCode, bool down,
+    const char *KeyAsString, BMessage &EventMessage);
+    // Formats and sends out the BMessage for a normal type of key press.
+
+  void SendUnmappedKeys (key_info &OldKeyState, key_info &NewKeyState);
+    // Sends B_UNMAPPED_KEY_UP or B_UNMAPPED_KEY_DOWN messages for all keys
+    // that have changed between the old and new states.
 
   void setServer (rfb::VNCServer *ServerPntr);
     // Specifies the VNC server to use.  This is the thing which will parse VNC
@@ -148,16 +165,16 @@ public:
     // authenticated clients, and therefore the desktop can cease any expensive
     // tasks.
 
-  void SendUnmappedKeys (key_info &OldKeyState, key_info &NewKeyState);
-    // Sends B_UNMAPPED_KEY_UP or B_UNMAPPED_KEY_DOWN messages for all keys
-    // that have changed between the old and new states.
-
-  void UpdateDerivedModifiersAndPressedModifierKeys (key_info &KeyState);
+  void UpdateDerivedModifiers (uint32 &Modifiers);
     // Looks at the modifier flags for individual modifier keys (left and right
     // control, L&R shift, etc) and sets the derived modifier flags (plain
-    // control, plain shift, etc) to match.  Then it updates the keyboard bits
-    // to show the corresponding buttons being pressed down or up (using the
-    // previously obtained keymap).
+    // control, plain shift, etc) to match.
+
+  void UpdateModifierKeys (key_info &KeyState);
+    // Looks at the modifier flags for individual modifier keys (left and right
+    // control, L&R shift, etc) and update the keyboard bits to show the
+    // corresponding buttons being pressed down or up (using the previously
+    // obtained keymap).
 
 protected:
   int m_BackgroundNextScanLineY;
@@ -207,7 +224,8 @@ protected:
     // Identifies which of the 127 keys are currently being held down on the
     // imaginary ghost of the user's keyboard (using the current keymap to
     // figure out which keys do what).  Also remembers the modifier modes (caps
-    // lock etc) last in use.
+    // lock, control, shift etc) last in use, which we're presenting to the
+    // BeOS input system.  See also m_UserModifierState.
 
   rdr::U8 m_LastMouseButtonState;
     // The mouse buttons from the last remote mouse update.  Needed since
@@ -231,4 +249,18 @@ protected:
   rfb::VNCServer *m_ServerPntr;
     // Identifies our server, which we can tell about our frame buffer and
     // other changes.  NULL if it hasn't been set yet.
+
+  uint32 m_UserModifierState;
+    // This stores the modifier keys (shift, control, etc) that the user thinks
+    // they have pressed down, as identified by VNC key codes for the various
+    // modifier keys.  If nothing special is going on, they are the same as the
+    // modifiers in m_LastKeyState.modifiers.  When a character comes in for
+    // conversion to BeOS keystrokes, it's first checked to see if it can be
+    // typed with the m_LastKeyState modifier settings.  If not, other
+    // modifiers are tested (shift and so on) to see if they can produce the
+    // key symbol.  This happens for upper case letters from the iPad, where it
+    // doesn't send a shift code before the letter.  Then the extra modifiers
+    // are typed, followed by the character.  If it is a key-up, then the extra
+    // modifier keys are released (goes back to the state in
+    // m_UserModifierState) after the user's virtual keystroke is released.
 };

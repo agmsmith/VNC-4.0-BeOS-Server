@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.28 2013/02/12 18:59:11 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.29 2013/02/12 22:18:33 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.29  2013/02/12 22:18:33  agmsmith
+ * Add a gradient bitmap for when no screen buffer is available,
+ * add a timeout to locking the frame buffer so that Haiku can
+ * work with its 0.5 second processing time limit.
+ *
  * Revision 1.28  2013/02/12 18:59:11  agmsmith
  * Reduce priority of debug message for update size changes.
  *
@@ -148,6 +153,7 @@
 
 #define XK_MISCELLANY 1
 #define XK_LATIN1 1
+#define XK_CURRENCY 1
 #include <rfb/keysymdef.h>
 
 /* BeOS (Be Operating System) headers. */
@@ -200,7 +206,7 @@ static rfb::BoolParameter ShowCheapCursor ("ShowCheapCursor",
   "visible on an iPad) gets sent to the client side, which will hopefully "
   "display it instead of your usual mouse cursor or no cursor.  If there "
   "was a way of getting the current BeOS cursor shape, we'd use that.",
-  1);
+  0);
 
 
 static char UTF8_Backspace [] = {B_BACKSPACE, 0};
@@ -432,6 +438,7 @@ static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
   {/* 0x00fd */ XK_yacute, "ý"},
   {/* 0x00fe */ XK_thorn, "þ"},
   {/* 0x00ff */ XK_ydiaeresis, "ÿ"},
+  {/* 0x20ac */ XK_EuroSign, "€"},
   {/* 0xFF08 */ XK_BackSpace, UTF8_Backspace},
   {/* 0xFF09 */ XK_Tab, UTF8_Tab},
   {/* 0xFF0D */ XK_Return, UTF8_Return},
@@ -475,6 +482,40 @@ static inline void SetKeyState (
 }
 
 
+static void PrintModifierState(uint32 Modifiers, char *OutputBuffer)
+{
+  // Write a readable description of the modifier keys to the buffer, which
+  // should be 135 characters or longer to be safe.
+
+  OutputBuffer[0] = 0;
+  if (Modifiers & B_CAPS_LOCK)
+    strcat(OutputBuffer, "CAPS_LOCK ");
+  if (Modifiers & B_SCROLL_LOCK)
+    strcat(OutputBuffer, "SCROLL_LOCK ");
+  if (Modifiers & B_NUM_LOCK)
+    strcat(OutputBuffer, "NUM_LOCK ");
+  if (Modifiers & B_LEFT_SHIFT_KEY)
+    strcat(OutputBuffer, "LEFT_SHIFT ");
+  if (Modifiers & B_RIGHT_SHIFT_KEY)
+    strcat(OutputBuffer, "RIGHT_SHIFT ");
+  if (Modifiers & B_LEFT_COMMAND_KEY)
+    strcat(OutputBuffer, "LEFT_COMMAND ");
+  if (Modifiers & B_RIGHT_COMMAND_KEY)
+    strcat(OutputBuffer, "RIGHT_COMMAND ");
+  if (Modifiers & B_LEFT_CONTROL_KEY)
+    strcat(OutputBuffer, "LEFT_CONTROL ");
+  if (Modifiers & B_RIGHT_CONTROL_KEY)
+    strcat(OutputBuffer, "RIGHT_CONTROL ");
+  if (Modifiers & B_LEFT_OPTION_KEY)
+    strcat(OutputBuffer, "LEFT_OPTION ");
+  if (Modifiers & B_RIGHT_OPTION_KEY)
+    strcat(OutputBuffer, "RIGHT_OPTION ");
+
+  size_t OutLen = strlen (OutputBuffer);
+  if (OutLen > 0)
+    OutputBuffer[OutLen-1] = 0; // Remove trailing space.
+}
+
 
 /******************************************************************************
  * The SDesktopBeOS class, methods follow in mostly alphabetical order.
@@ -494,7 +535,8 @@ SDesktopBeOS::SDesktopBeOS () :
   m_LastMouseDownTime (0),
   m_LastMouseX (-1.0F),
   m_LastMouseY (-1.0F),
-  m_ServerPntr (NULL)
+  m_ServerPntr (NULL),
+  m_UserModifierState(0)
 {
   get_click_speed (&m_DoubleClickTimeLimit);
   memset (&m_LastKeyState, 0, sizeof (m_LastKeyState));
@@ -577,7 +619,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
         OldUpdateSize = m_BackgroundNumberOfScanLinesPerUpdate;
         if (UpdatesPerSecond < 20)
           m_BackgroundNumberOfScanLinesPerUpdate--;
-        else if (UpdatesPerSecond > 25)
+        else if (UpdatesPerSecond > 30)
           m_BackgroundNumberOfScanLinesPerUpdate++;
 
         // Only go as small as 4 for performance reasons.
@@ -676,6 +718,38 @@ uint8 SDesktopBeOS::FindKeyCodeFromMap (
 }
 
 
+const char* SDesktopBeOS::FindMappedSymbolFromKeycode (
+  int32 *MapOffsetArray,
+  uint8 KeyCode)
+{
+  // Looks up the symbol for a given keycode in a keymap.  Returns results
+  // copied to a temporary global string, so copy them elsewhere if you want to
+  // keep them.  Also not thread safe.
+
+  static char *EmptyString = "";
+  int32       *OffsetPntr;
+  static char  ReturnedString[8];
+  uint8        StringLength;
+  char        *StringPntr;
+
+  if (KeyCode >= 128)
+    return EmptyString;
+
+  OffsetPntr = MapOffsetArray + KeyCode;
+  StringPntr = m_KeyCharStrings + *OffsetPntr;
+  StringLength = *StringPntr++; // Pascal style with initial length byte.
+  if (StringLength <= 0)
+    return EmptyString;
+  if (StringLength >= sizeof (ReturnedString))
+    StringLength = sizeof (ReturnedString) - 1;
+
+  memcpy (ReturnedString, StringPntr, StringLength);
+  ReturnedString[StringLength] = 0;
+
+  return ReturnedString;
+}
+
+
 rfb::Point SDesktopBeOS::getFbSize ()
 {
   vlog.debug ("getFbSize called.");
@@ -708,9 +782,9 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   m_FrameBufferBeOSPntr->width () <= 0 || m_KeyMapPntr == NULL)
     return;
 
+  NewKeyState = m_LastKeyState;
   vlog.debug ("VNC keycode $%04X received, key is %s.",
     key, down ? "down" : "up");
-  NewKeyState = m_LastKeyState;
 
   // If it's a shift or other modifier key, update our internal modifiers
   // state.
@@ -752,11 +826,18 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   if (ChangedModifiers != 0)
   {
     if (down)
+    {
       NewKeyState.modifiers |= ChangedModifiers;
+      m_UserModifierState |= ChangedModifiers;
+    }
     else
+    {
       NewKeyState.modifiers &= ~ChangedModifiers;
-
-    UpdateDerivedModifiersAndPressedModifierKeys (NewKeyState);
+      m_UserModifierState &= ~ChangedModifiers;
+    }
+    UpdateDerivedModifiers (m_UserModifierState);
+    UpdateDerivedModifiers (NewKeyState.modifiers);
+    UpdateModifierKeys (NewKeyState);
 
     if (NewKeyState.modifiers != m_LastKeyState.modifiers)
     {
@@ -796,6 +877,9 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   if (KeyCode != 0)
   {
+    vlog.debug ("%s functionish key code %d.",
+      down ? "Pressed" : "Released", KeyCode);
+
     SetKeyState (m_LastKeyState, KeyCode, down);
 
     EventMessage.what = down ? B_KEY_DOWN : B_KEY_UP;
@@ -875,13 +959,15 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     }
     else if (key == 27)
       KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "[");
-    // Can't type code 28 in BeOS, no normal key for it.  Somebody goofed.
+    else if (key == 28)
+      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "\\");
     else if (key == 29)
       KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "]");
     else if (key == 30)
       KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->shift_map, "^");
     else if (key == 31)
       KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->shift_map, "_");
+
     if (KeyCode == 0)
       KeyCode = 1; // The rest get what's usually the escape key.
   }
@@ -917,34 +1003,131 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   if (KeyCode != 0)
   {
-    // Got a key that works with the current modifier settings.
-    // Just simulate pressing it.
+    // Got a key that works with the current modifier settings.  Simulate
+    // pressing it.
+
+    vlog.debug ("%s regular key code %d.",
+      down ? "Pressed" : "Released", KeyCode);
 
     SetKeyState (m_LastKeyState, KeyCode, down);
+    SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
 
-    EventMessage.what = down ? B_KEY_DOWN : B_KEY_UP;
-    EventMessage.AddInt64 ("when", system_time ());
-    EventMessage.AddInt32 ("key", KeyCode);
-    EventMessage.AddInt32 ("modifiers", m_LastKeyState.modifiers);
-    EventMessage.AddInt8 ("byte", KeyAsString [0]);
-    EventMessage.AddString ("bytes", KeyAsString);
-    EventMessage.AddData ("states", B_UINT8_TYPE,
-      m_LastKeyState.key_states, 16);
-    EventMessage.AddInt32 ("raw_char", key & 0xFF); // Could be wrong.
-    m_EventInjectorPntr->Control ('EInj', &EventMessage);
-    EventMessage.MakeEmpty ();
+    // Finally, revert back to the modifier keys the user had specified, if
+    // this was a release of the key.
+
+    if (m_LastKeyState.modifiers != m_UserModifierState && !down)
+    {
+      char TempString[400];
+      sprintf (TempString, "Restoring modifiers from (");
+      PrintModifierState (m_LastKeyState.modifiers,
+        TempString + strlen (TempString));
+      strcat (TempString, ") to user's original modifiers of (");
+      PrintModifierState (m_UserModifierState, TempString + strlen (TempString));
+      strcat (TempString, ").");
+      vlog.debug ("%s", TempString);
+
+      NewKeyState = m_LastKeyState;
+      NewKeyState.modifiers = m_UserModifierState;
+      UpdateModifierKeys (NewKeyState);
+
+      EventMessage.what = B_MODIFIERS_CHANGED;
+      EventMessage.AddInt64 ("when", system_time ());
+      EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
+      EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
+      EventMessage.AddData ("states",
+        B_UINT8_TYPE, &NewKeyState.key_states, 16);
+      m_EventInjectorPntr->Control ('EInj', &EventMessage);
+      EventMessage.MakeEmpty ();
+
+      SendUnmappedKeys (m_LastKeyState, NewKeyState);
+      m_LastKeyState = NewKeyState;
+    }
+
+    return; // Finished with ordinary key presses.
+  }
+
+  // The key isn't an obvious one.  Check all the keymap tables to see if we
+  // can get to that character by pressing combinations of the modifier keys.
+  // If it's found, temporarily switch to those modifier keys being pressed and
+  // then send the message for that key pressed.  If it was a key-up then
+  // release the temporary modifier key changes and go back to the modifier
+  // keys the user specified.
+
+  uint32 NewModifier = 0;
+  if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->normal_map, KeyAsString)))
+    NewModifier = 0;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->shift_map, KeyAsString)))
+    NewModifier = B_LEFT_SHIFT_KEY;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->caps_map, KeyAsString)))
+    NewModifier = B_CAPS_LOCK;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->caps_shift_map, KeyAsString)))
+    NewModifier = B_CAPS_LOCK | B_LEFT_SHIFT_KEY;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->option_map, KeyAsString)))
+    NewModifier = B_LEFT_OPTION_KEY;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->option_shift_map, KeyAsString)))
+    NewModifier = B_LEFT_OPTION_KEY | B_LEFT_SHIFT_KEY;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->option_caps_map, KeyAsString)))
+    NewModifier = B_LEFT_OPTION_KEY | B_CAPS_LOCK;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->option_caps_shift_map, KeyAsString)))
+    NewModifier = B_LEFT_OPTION_KEY | B_CAPS_LOCK | B_LEFT_SHIFT_KEY;
+
+  if (KeyCode == 0)
+  {
+    vlog.debug ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
+      "which BeOS keys need to be \"pressed\" to achieve that.  Ignoring it.",
+      key, down ? "down" : "up", KeyAsString);
     return;
   }
 
-  // The key isn't an obvious one.  Check all the keymap tables and simulate
-  // pressing shift keys etc. to get that code, then send the message for that
-  // key pressed, then release the temporary modifier key changes.  Well,
-  // that's a lot of work so it will be done later if needed.  I won't even
-  // write much about dead keys.
+  NewModifier |= (m_LastKeyState.modifiers & (
+    B_SCROLL_LOCK | B_NUM_LOCK | B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY));
+  UpdateDerivedModifiers (NewModifier);
 
-  vlog.debug ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
-    "which BeOS keys need to be \"pressed\" to achieve that.  Ignoring it.",
-    key, down ? "down" : "up", KeyAsString);
+  { // Debug message block.
+    char TempString[400];
+    sprintf (TempString, "VNC keycode $%04X (%s) maps to \"%s\", but we need "
+      "to change modifiers from (", key, down ? "down" : "up", KeyAsString);
+    PrintModifierState (m_LastKeyState.modifiers,
+      TempString + strlen (TempString));
+    strcat (TempString, ") to (");
+    PrintModifierState (NewModifier, TempString + strlen (TempString));
+    strcat (TempString, ").");
+    vlog.debug ("%s", TempString);
+  }
+
+  NewKeyState = m_LastKeyState;
+  NewKeyState.modifiers = NewModifier;
+  UpdateModifierKeys (NewKeyState);
+
+  if (NewKeyState.modifiers != m_LastKeyState.modifiers)
+  {
+    EventMessage.what = B_MODIFIERS_CHANGED;
+    EventMessage.AddInt64 ("when", system_time ());
+    EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
+    EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
+    EventMessage.AddData ("states",
+      B_UINT8_TYPE, &NewKeyState.key_states, 16);
+    m_EventInjectorPntr->Control ('EInj', &EventMessage);
+    EventMessage.MakeEmpty ();
+  }
+  SendUnmappedKeys (m_LastKeyState, NewKeyState);
+  m_LastKeyState = NewKeyState;
+
+  // Now send the actual key, using the modified modifier keys.
+
+  vlog.debug ("%s temporarily shifted key code %d.",
+    down ? "Pressed" : "Released", KeyCode);
+
+  SetKeyState (m_LastKeyState, KeyCode, down);
+  SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
 }
 
 
@@ -1181,30 +1364,62 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
 }
 
 
+void SDesktopBeOS::SendMappedKeyMessage (uint8 KeyCode, bool down,
+  const char *KeyAsString, BMessage &EventMessage)
+{
+    EventMessage.what = down ? B_KEY_DOWN : B_KEY_UP;
+    EventMessage.AddInt64 ("when", system_time ());
+    EventMessage.AddInt32 ("key", KeyCode);
+    EventMessage.AddInt32 ("modifiers", m_LastKeyState.modifiers);
+
+    ssize_t NumBytes = strlen (KeyAsString);
+    if (NumBytes > 0)
+    {
+      EventMessage.AddData ("byte", B_INT8_TYPE, KeyAsString,
+        1 /* numBytes is array element size */, true /* fixedSize */,
+        NumBytes /* numItems in the array */);
+      for (int i = 1; i < NumBytes; i++)
+        EventMessage.AddData ("byte", B_INT8_TYPE, KeyAsString + i, 1);
+    }
+
+    EventMessage.AddString ("bytes", KeyAsString);
+    EventMessage.AddData ("states", B_UINT8_TYPE,
+      m_LastKeyState.key_states, 16);
+    EventMessage.AddInt32 ("raw_char",
+      FindMappedSymbolFromKeycode (m_KeyMapPntr->normal_map, KeyCode)[0]);
+    m_EventInjectorPntr->Control ('EInj', &EventMessage);
+    EventMessage.MakeEmpty ();
+}
+
+
 void SDesktopBeOS::SendUnmappedKeys (
   key_info &OldKeyState,
   key_info &NewKeyState)
 {
-  int      BitIndex;
-  int      ByteIndex;
-  uint8    DeltaBit;
-  BMessage EventMessage;
-  int      KeyCode;
-  uint8    Mask;
-  uint8    NewBits;
-  uint8    OldBits;
+  int          BitIndex;
+  unsigned int ByteIndex;
+  uint8        DeltaBit;
+  BMessage     EventMessage;
+  int          KeyCode;
+  uint8        Mask;
+  uint8        NewBits;
+  uint8        OldBits;
 
   KeyCode = 0;
-  for (ByteIndex = 0; ByteIndex < 7; ByteIndex++)
+  for (ByteIndex = 0; ByteIndex < sizeof (OldKeyState.key_states); ByteIndex++)
   {
     OldBits = OldKeyState.key_states[ByteIndex];
     NewBits = NewKeyState.key_states[ByteIndex];
+    if (OldBits == NewBits)
+      continue; // Group of eight keys are unchanged.
     for (BitIndex = 7; BitIndex >= 0; BitIndex--, KeyCode++)
     {
       Mask = 1 << BitIndex;
-      DeltaBit = (OldBits ^ NewBits) & Mask;
+      DeltaBit = ((OldBits ^ NewBits) & Mask);
       if (DeltaBit == 0)
         continue; // Key hasn't changed.
+      vlog.debug ("%s unmapped key code %d.",
+        (NewBits & Mask) ? "Pressed" : "Released", KeyCode);
       EventMessage.what =
         (NewBits & Mask) ? B_UNMAPPED_KEY_DOWN : B_UNMAPPED_KEY_UP;
       EventMessage.AddInt64 ("when", system_time ());
@@ -1303,15 +1518,15 @@ void SDesktopBeOS::stop ()
 }
 
 
-void SDesktopBeOS::UpdateDerivedModifiersAndPressedModifierKeys (
-  key_info &KeyState)
+void SDesktopBeOS::UpdateDerivedModifiers (
+  uint32 &Modifiers)
 {
   uint32 TempModifiers;
 
   // Update the virtual modifiers, ones which have a left and right key that do
   // the same thing to reflect the state of the real keys.
 
-  TempModifiers = KeyState.modifiers;
+  TempModifiers = Modifiers;
 
   if (TempModifiers & (B_LEFT_SHIFT_KEY | B_RIGHT_SHIFT_KEY))
     TempModifiers |= B_SHIFT_KEY;
@@ -1333,34 +1548,41 @@ void SDesktopBeOS::UpdateDerivedModifiersAndPressedModifierKeys (
   else
     TempModifiers &= ~ (uint32) B_OPTION_KEY;
 
-  KeyState.modifiers = TempModifiers;
+  Modifiers = TempModifiers;
+}
 
+
+void SDesktopBeOS::UpdateModifierKeys (
+  key_info &KeyState)
+{
   if (m_KeyMapPntr == NULL)
     return; // Can't do anything more without it.
 
   // Update the pressed keys to reflect the modifiers.  Use the keymap to find
   // the keycode for the actual modifier key.
 
-  SetKeyState (KeyState,
-    m_KeyMapPntr->caps_key, TempModifiers & B_CAPS_LOCK);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->scroll_key, TempModifiers & B_SCROLL_LOCK);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->num_key, TempModifiers & B_NUM_LOCK);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->left_shift_key, TempModifiers & B_LEFT_SHIFT_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->right_shift_key, TempModifiers & B_RIGHT_SHIFT_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->left_command_key, TempModifiers & B_LEFT_COMMAND_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->right_command_key, TempModifiers & B_RIGHT_COMMAND_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->left_control_key, TempModifiers & B_LEFT_CONTROL_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->right_control_key, TempModifiers & B_RIGHT_CONTROL_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->left_option_key, TempModifiers & B_LEFT_OPTION_KEY);
-  SetKeyState (KeyState,
-    m_KeyMapPntr->right_option_key, TempModifiers & B_RIGHT_OPTION_KEY);
+  uint32 TempModifiers = KeyState.modifiers;
+
+  SetKeyState (KeyState, m_KeyMapPntr->caps_key,
+    (TempModifiers & B_CAPS_LOCK) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->scroll_key,
+    (TempModifiers & B_SCROLL_LOCK) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->num_key,
+    (TempModifiers & B_NUM_LOCK) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->left_shift_key,
+    (TempModifiers & B_LEFT_SHIFT_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->right_shift_key,
+    (TempModifiers & B_RIGHT_SHIFT_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->left_command_key,
+    (TempModifiers & B_LEFT_COMMAND_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->right_command_key,
+    (TempModifiers & B_RIGHT_COMMAND_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->left_control_key,
+    (TempModifiers & B_LEFT_CONTROL_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->right_control_key,
+    (TempModifiers & B_RIGHT_CONTROL_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->left_option_key,
+    (TempModifiers & B_LEFT_OPTION_KEY) != 0);
+  SetKeyState (KeyState, m_KeyMapPntr->right_option_key,
+    (TempModifiers & B_RIGHT_OPTION_KEY) != 0);
 }
