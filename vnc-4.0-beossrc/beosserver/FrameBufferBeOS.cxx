@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.18 2013/02/12 22:18:33 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.19 2013/02/12 22:54:13 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.19  2013/02/12 22:54:13  agmsmith
+ * Restrict colours to gray in the BeOS palette for the technical difficulties.
+ *
  * Revision 1.18  2013/02/12 22:18:33  agmsmith
  * Add a gradient bitmap for when no screen buffer is available,
  * add a timeout to locking the frame buffer so that Haiku can
@@ -265,11 +268,6 @@ public:
 
 private:
   BDirectWindowReader (); // Default constructor shouldn't be used so hide it.
-
-  char m_TechnicalProblemsPicture[1024];
-    // When the screen is switching modes (the BDirectWindow temporarily isn't
-    // connected), we can't access the frame buffer and instead display this
-    // one line grayscale bitmap.  It's initialised to a gradient.
 };
 
 
@@ -291,18 +289,6 @@ BDirectWindowReader::BDirectWindowReader (color_map *ColourMapPntr)
   ResizeTo (80, 20); // A small window so it doesn't obscure the desktop.
 
   memcpy (m_ColourMapPntr, ScreenInfo.ColorMap (), sizeof (*m_ColourMapPntr));
-
-  // Set up a gradient gray scale one line bitmap for use when we can't display
-  // the screen.  In the BeOS colour palette, 0 to 31 are grays, 63 is white.
-
-  int i;
-  for (i = 0; i < 256; i++)
-    m_TechnicalProblemsPicture[i] = i % 32;
-  for (; i < (int) sizeof (m_TechnicalProblemsPicture) - 255; i++)
-    m_TechnicalProblemsPicture[i] = 63;
-  for (; i < (int) sizeof (m_TechnicalProblemsPicture); i++)
-    m_TechnicalProblemsPicture[i] =
-      (sizeof(m_TechnicalProblemsPicture) - i - 1) % 32;
 
   m_DoNotConnect = false; // Now ready for active operation.
 }
@@ -368,23 +354,12 @@ void BDirectWindowReader::DirectConnected (
 
     case B_DIRECT_STOP:
       m_Connected = false;
+      m_SavedFrameBufferInfo.bits = NULL; // Makes us show technical problems.
       m_ConnectionVersion++;
       break;
 
     default:
       break;
-  }
-
-  if (!m_Connected || m_SavedFrameBufferInfo.bits == NULL)
-  {
-    // Use our technical problems bitmap since the screen isn't available.
-    m_SavedFrameBufferInfo.bits = m_TechnicalProblemsPicture;
-    m_SavedFrameBufferInfo.bits_per_pixel = 8;
-    m_SavedFrameBufferInfo.bytes_per_row = 0; // Repeat the same row.
-    m_SavedFrameBufferInfo.pixel_format = B_GRAY8;
-    m_ScreenSize.Set(0.0, 0.0,
-      sizeof(m_TechnicalProblemsPicture)-1,
-      sizeof(m_TechnicalProblemsPicture)-1);
   }
 
   if (LockErrorCode == B_OK)
@@ -530,6 +505,18 @@ FrameBufferBDirect::FrameBufferBDirect ()
 {
   vlog.debug ("Constructing a FrameBufferBDirect object.");
 
+  // Set up a gradient gray scale one line bitmap for use when we can't display
+  // the screen.  In the BeOS colour palette, 0 to 31 are grays, 63 is white.
+
+  int i;
+  for (i = 0; i < 256; i++)
+    m_TechnicalProblemsPicture[i] = (i & 32) ? 31 - i % 32 : i % 32;
+  for (; i < (int) sizeof (m_TechnicalProblemsPicture) - 255; i++)
+    m_TechnicalProblemsPicture[i] = 63;
+  for (; i < (int) sizeof (m_TechnicalProblemsPicture); i++)
+    m_TechnicalProblemsPicture[i] =
+      (sizeof (m_TechnicalProblemsPicture) - i - 1) % 32;
+
   if (BDirectWindow::SupportsWindowMode ())
   {
     m_StatusWindowPntr =
@@ -575,167 +562,175 @@ void FrameBufferBDirect::UnlockFrameBuffer ()
 
 unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
 {
-  BDirectWindowReader *BDirectWindowPntr;
-  direct_buffer_info  *DirectInfoPntr;
-  unsigned int         EndianTest;
-
-  BDirectWindowPntr = static_cast<BDirectWindowReader *> (m_StatusWindowPntr);
+  BDirectWindowReader *BDirectWindowPntr =
+    static_cast<BDirectWindowReader *> (m_StatusWindowPntr);
   if (BDirectWindowPntr == NULL)
   {
     width_ = 0;
     height_ = 0;
+    m_CachedStride = 0;
     return m_CachedPixelFormatVersion;
   }
 
-  if (m_CachedPixelFormatVersion != BDirectWindowPntr->m_ConnectionVersion)
+  if (m_CachedPixelFormatVersion == BDirectWindowPntr->m_ConnectionVersion)
+    return m_CachedPixelFormatVersion;
+
+  m_CachedPixelFormatVersion = BDirectWindowPntr->m_ConnectionVersion;
+  direct_buffer_info *DirectInfoPntr =
+    &BDirectWindowPntr->m_SavedFrameBufferInfo;
+  data = (rdr::U8 *) DirectInfoPntr->bits;
+  color_space BeOSPixelFormat = DirectInfoPntr->pixel_format;
+  colourmap = &m_ColourMap;
+
+  if (data == NULL)
   {
-    m_CachedPixelFormatVersion = BDirectWindowPntr->m_ConnectionVersion;
-    DirectInfoPntr = &BDirectWindowPntr->m_SavedFrameBufferInfo;
+    // Screen bitmap is not available (happens momentarily when switching
+    // screen resolutions, or permanently if HaikuOS has timed out), so use our
+    // technical problems placeholder bitmap, which is 8 bits deep.
 
-    // Set up some initial default values.  The actual values will be put in
-    // depending on the particular video mode.
-
-    colourmap = &m_ColourMap;
-
+    data = (rdr::U8 *) m_TechnicalProblemsPicture;
+    format.bpp = 8;
+    BeOSPixelFormat = B_CMAP8;
+    width_ = height_ = sizeof (m_TechnicalProblemsPicture);
+    m_CachedStride = 0; // Repeat the same row of pixels for all scan lines.
+  }
+  else // Have access to the real screen bitmap.
+  {
     format.bpp = DirectInfoPntr->bits_per_pixel;
-    // Number of actual colour bits, excluding alpha and pad bits.
-    format.depth = DirectInfoPntr->bits_per_pixel;
-    format.trueColour = true; // It usually is a non-palette video mode.
-
-    EndianTest = 1;
-    format.bigEndian = ((* (unsigned char *) &EndianTest) == 0);
-
-    format.blueShift = 0;
-    format.greenShift = 8;
-    format.redShift = 16;
-    format.redMax = format.greenMax = format.blueMax = 255;
-
-    // Now set it according to the actual screen format.
-
-    switch (DirectInfoPntr->pixel_format)
-    {
-      case B_RGB32: // xRGB 8:8:8:8, stored as little endian uint32
-      case B_RGBA32: // ARGB 8:8:8:8, stored as little endian uint32
-        format.bpp = 32;
-        format.depth = 24;
-        format.blueShift = 0;
-        format.greenShift = 8;
-        format.redShift = 16;
-        format.redMax = format.greenMax = format.blueMax = 255;
-        break;
-
-      case B_RGB24:
-        format.bpp = 24;
-        format.depth = 24;
-        format.blueShift = 0;
-        format.greenShift = 8;
-        format.redShift = 16;
-        format.redMax = format.greenMax = format.blueMax = 255;
-        break;
-
-      case B_RGB16: // xRGB 5:6:5, stored as little endian uint16
-        format.bpp = 16;
-        format.depth = 16;
-        format.blueShift = 0;
-        format.greenShift = 5;
-        format.redShift = 11;
-        format.redMax = 31;
-        format.greenMax = 63;
-        format.blueMax = 31;
-        break;
-
-      case B_RGB15: // RGB 1:5:5:5, stored as little endian uint16
-      case B_RGBA15: // ARGB 1:5:5:5, stored as little endian uint16
-        format.bpp = 16;
-        format.depth = 15;
-        format.blueShift = 0;
-        format.greenShift = 5;
-        format.redShift = 10;
-        format.redMax = format.greenMax = format.blueMax = 31;
-        break;
-
-      case B_CMAP8: // 256-color index into the color table.
-      case B_GRAY8: // 256-color greyscale value.
-        format.bpp = 8;
-        format.depth = 8;
-        format.blueShift = 0;
-        format.greenShift = 0;
-        format.redShift = 0;
-        format.redMax = 255;
-        format.greenMax = 255;
-        format.blueMax = 255;
-        format.trueColour = false;
-        break;
-
-      case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
-      case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
-      case B_RGB24_BIG: // Currently unused
-        format.bpp = 32;
-        format.depth = 24;
-        format.blueShift = 0;
-        format.greenShift = 8;
-        format.redShift = 16;
-        format.redMax = format.greenMax = format.blueMax = 255;
-        break;
-
-      case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
-        format.bpp = 16;
-        format.depth = 16;
-        format.blueShift = 0;
-        format.greenShift = 5;
-        format.redShift = 11;
-        format.redMax = 31;
-        format.greenMax = 63;
-        format.blueMax = 31;
-        break;
-
-      case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
-      case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
-        format.bpp = 16;
-        format.depth = 15;
-        format.blueShift = 0;
-        format.greenShift = 5;
-        format.redShift = 10;
-        format.redMax = format.greenMax = format.blueMax = 31;
-        break;
-
-      default:
-        vlog.error ("Unimplemented video mode #%d in UpdatePixelFormatEtc.",
-        (unsigned int) DirectInfoPntr->pixel_format);
-        break;
-    }
-
-    // Also update the real data - the actual bits and buffer size.
-
-    data = (rdr::U8 *) DirectInfoPntr->bits;
-
     width_ = (int) (BDirectWindowPntr->m_ScreenSize.right -
       BDirectWindowPntr->m_ScreenSize.left + 1.5);
     height_ = (int) (BDirectWindowPntr->m_ScreenSize.bottom -
       BDirectWindowPntr->m_ScreenSize.top + 1.5);
-
-    // Update the cached stride value.  Units are pixels, not bytes!
 
     if (DirectInfoPntr->bits_per_pixel <= 0)
       m_CachedStride = 0;
     else
       m_CachedStride = DirectInfoPntr->bytes_per_row /
       ((DirectInfoPntr->bits_per_pixel + 7) / 8);
-
-    // Print out the new settings.  May cause a deadlock if you happen to be
-    // printing this when the video mode is switching, since the AppServer
-    // would be locked out and unable to display the printed text.  But
-    // that only happens in debug mode.
-
-    char TempString [2048];
-    sprintf (TempString,
-      "UpdatePixelFormatEtc new settings: "
-      "Width=%d, Stride=%d, Height=%d, Bits at $%08X, ",
-      width_, m_CachedStride, height_, (unsigned int) data);
-    format.print (TempString + strlen (TempString),
-      sizeof (TempString) - strlen (TempString));
-    vlog.debug (TempString);
   }
+
+  // Set up some initial default values.  The actual values will be put in
+  // depending on the particular video mode.
+
+  format.depth = format.bpp; // Colour bits, excluding alpha and pad bits.
+  format.trueColour = true; // It usually is a non-palette video mode.
+
+  unsigned int EndianTest = 1;
+  format.bigEndian = ((* (unsigned char *) &EndianTest) == 0);
+
+  format.blueShift = 0;
+  format.greenShift = 8;
+  format.redShift = 16;
+  format.redMax = format.greenMax = format.blueMax = 255;
+
+  // Now set it according to the actual screen format.
+
+  switch (BeOSPixelFormat)
+  {
+    case B_RGB32: // xRGB 8:8:8:8, stored as little endian uint32
+    case B_RGBA32: // ARGB 8:8:8:8, stored as little endian uint32
+      format.bpp = 32;
+      format.depth = 24;
+      format.blueShift = 0;
+      format.greenShift = 8;
+      format.redShift = 16;
+      format.redMax = format.greenMax = format.blueMax = 255;
+      break;
+
+    case B_RGB24:
+      format.bpp = 24;
+      format.depth = 24;
+      format.blueShift = 0;
+      format.greenShift = 8;
+      format.redShift = 16;
+      format.redMax = format.greenMax = format.blueMax = 255;
+      break;
+
+    case B_RGB16: // xRGB 5:6:5, stored as little endian uint16
+      format.bpp = 16;
+      format.depth = 16;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 11;
+      format.redMax = 31;
+      format.greenMax = 63;
+      format.blueMax = 31;
+      break;
+
+    case B_RGB15: // RGB 1:5:5:5, stored as little endian uint16
+    case B_RGBA15: // ARGB 1:5:5:5, stored as little endian uint16
+      format.bpp = 16;
+      format.depth = 15;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 10;
+      format.redMax = format.greenMax = format.blueMax = 31;
+      break;
+
+    case B_CMAP8: // 256-color index into the color table.
+    case B_GRAY8: // 256-color greyscale value.
+      format.bpp = 8;
+      format.depth = 8;
+      format.blueShift = 0;
+      format.greenShift = 0;
+      format.redShift = 0;
+      format.redMax = 255;
+      format.greenMax = 255;
+      format.blueMax = 255;
+      format.trueColour = false; // Paletted mode.
+      break;
+
+    case B_RGB32_BIG: // xRGB 8:8:8:8, stored as big endian uint32
+    case B_RGBA32_BIG: // ARGB 8:8:8:8, stored as big endian uint32
+    case B_RGB24_BIG: // Currently unused
+      format.bpp = 32;
+      format.depth = 24;
+      format.blueShift = 0;
+      format.greenShift = 8;
+      format.redShift = 16;
+      format.redMax = format.greenMax = format.blueMax = 255;
+      break;
+
+    case B_RGB16_BIG: // RGB 5:6:5, stored as big endian uint16
+      format.bpp = 16;
+      format.depth = 16;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 11;
+      format.redMax = 31;
+      format.greenMax = 63;
+      format.blueMax = 31;
+      break;
+
+    case B_RGB15_BIG: // xRGB 1:5:5:5, stored as big endian uint16
+    case B_RGBA15_BIG: // ARGB 1:5:5:5, stored as big endian uint16
+      format.bpp = 16;
+      format.depth = 15;
+      format.blueShift = 0;
+      format.greenShift = 5;
+      format.redShift = 10;
+      format.redMax = format.greenMax = format.blueMax = 31;
+      break;
+
+    default:
+      vlog.error ("Unimplemented video mode #%d in UpdatePixelFormatEtc.",
+      (unsigned int) DirectInfoPntr->pixel_format);
+      break;
+  }
+
+  // Print out the new settings.  May cause a deadlock if you happen to be
+  // printing this when the video mode is switching, since the AppServer
+  // would be locked out and unable to display the printed text.  But
+  // that only happens in debug mode.
+
+  char TempString [2048];
+  sprintf (TempString,
+    "UpdatePixelFormatEtc new settings: "
+    "Width=%d, Stride=%d, Height=%d, Bits at $%08X, ",
+    width_, m_CachedStride, height_, (unsigned int) data);
+  format.print (TempString + strlen (TempString),
+    sizeof (TempString) - strlen (TempString));
+  vlog.debug (TempString);
 
   return m_CachedPixelFormatVersion;
 }

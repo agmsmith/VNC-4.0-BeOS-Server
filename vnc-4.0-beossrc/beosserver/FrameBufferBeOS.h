@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.8 2005/02/12 19:47:24 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.9 2013/02/12 22:18:33 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.9  2013/02/12 22:18:33  agmsmith
+ * Add a gradient bitmap for when no screen buffer is available,
+ * add a timeout to locking the frame buffer so that Haiku can
+ * work with its 0.5 second processing time limit.
+ *
  * Revision 1.8  2005/02/12 19:47:24  agmsmith
  * Moved the two different colour palette structures into the
  * parent class and unified them.
@@ -161,6 +166,12 @@ public:
   virtual unsigned int LockFrameBuffer ();
   virtual void UnlockFrameBuffer ();
   virtual unsigned int UpdatePixelFormatEtc ();
+
+private:
+  char m_TechnicalProblemsPicture[1024];
+    // When the screen is switching modes (the BDirectWindow temporarily isn't
+    // connected), we can't access the frame buffer and instead display this
+    // one line grayscale bitmap.  It's initialised to a gradient.
 };
 
 
