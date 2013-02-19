@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.30 2013/02/18 17:30:00 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.31 2013/02/19 03:21:52 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.31  2013/02/19 03:21:52  agmsmith
+ * Doc wording.
+ *
  * Revision 1.30  2013/02/18 17:30:00  agmsmith
  * Now sends fake shift and other modifier key presses to enable typing of letters
  * that are sent without the correct shift codes.  Like capital A on the iPad VNC
@@ -1419,13 +1422,13 @@ void SDesktopBeOS::SendUnmappedKeys (
   uint8        NewBits;
   uint8        OldBits;
 
-  KeyCode = 0;
   for (ByteIndex = 0; ByteIndex < sizeof (OldKeyState.key_states); ByteIndex++)
   {
     OldBits = OldKeyState.key_states[ByteIndex];
     NewBits = NewKeyState.key_states[ByteIndex];
     if (OldBits == NewBits)
       continue; // Group of eight keys are unchanged.
+    KeyCode = ByteIndex * 8;
     for (BitIndex = 7; BitIndex >= 0; BitIndex--, KeyCode++)
     {
       Mask = 1 << BitIndex;
