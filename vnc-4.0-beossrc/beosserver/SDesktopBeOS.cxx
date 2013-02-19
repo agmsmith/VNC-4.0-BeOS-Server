@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.29 2013/02/12 22:18:33 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.30 2013/02/18 17:30:00 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,17 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.30  2013/02/18 17:30:00  agmsmith
+ * Now sends fake shift and other modifier key presses to enable typing of letters
+ * that are sent without the correct shift codes.  Like capital A on the iPad VNC
+ * that sends it without any shift keys being pressed before it.  Also lets the
+ * iPad send fancy codes like the currency symbols.  Added Euro to the table,
+ * though BeOS doesn't have a pressable key for it.  Also fixed several bugs
+ * with sending messages - wasn't sending some modifier key presses due to a
+ * bug, also sends the Bytes part of the message properly (it can be more than
+ * one byte for UTF-8 multibyte strings) and also send raw_char as the keycode for
+ * the unmodified key corresponding to the key being pressed.
+ *
  * Revision 1.29  2013/02/12 22:18:33  agmsmith
  * Add a gradient bitmap for when no screen buffer is available,
  * add a timeout to locking the frame buffer so that Haiku can
@@ -205,7 +216,10 @@ static rfb::BoolParameter ShowCheapCursor ("ShowCheapCursor",
   "this parameter.  The shape (a blue/black/white cross large enough to be "
   "visible on an iPad) gets sent to the client side, which will hopefully "
   "display it instead of your usual mouse cursor or no cursor.  If there "
-  "was a way of getting the current BeOS cursor shape, we'd use that.",
+  "was a way of getting the current BeOS cursor shape, we'd use that.  "
+  "Alternatively you can try booting in safe video mode, then the cursor is "
+  "drawn into the screen bitmap rather than done as a separate hardware "
+  "cursor, but it is very slow.",
   0);
 
 
