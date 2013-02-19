@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.19 2013/02/12 22:54:13 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.20 2013/02/18 23:00:07 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.20  2013/02/18 23:00:07  agmsmith
+ * Don't overwrite the screen size when displaying the technical problems
+ * dummy screen.  So now it will go back to the correct size once the
+ * problems are done.
+ *
  * Revision 1.19  2013/02/12 22:54:13  agmsmith
  * Restrict colours to gray in the BeOS palette for the technical difficulties.
  *
@@ -309,8 +314,16 @@ void BDirectWindowReader::DirectConnected (
   direct_buffer_info *ConnectionInfoPntr)
 {
   if (!m_Connected && m_DoNotConnect)
-      return; // Shutting down or otherwise don't want to make a connection.
+    return; // Shutting down or otherwise don't want to make a connection.
 
+  direct_buffer_state MainState = (direct_buffer_state)
+    (ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK);
+  if (MainState == B_DIRECT_MODIFY &&
+  (ConnectionInfoPntr->buffer_state & B_BUFFER_RESIZED) == 0 &&
+  (ConnectionInfoPntr->buffer_state & B_BUFFER_MOVED) == 0 &&
+  (ConnectionInfoPntr->buffer_state & B_BUFFER_RESET) == 0)
+    return; // One of those uninteresting messages, HaikuOS spews a lot of them.
+  
   // For debugging purposes, measure the elapsed time to see if we're getting
   // close to the 3 seconds maximum allowed by BeOS or 0.5 seconds for Haiku.
   // Could happen if we have to wait for a full screen to be transmitted.
@@ -319,7 +332,7 @@ void BDirectWindowReader::DirectConnected (
   bigtime_t StartTime = system_time();
 
   const char *OperationName;
-  switch (ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK)
+  switch (MainState)
   {
     case B_DIRECT_START: OperationName = "B_DIRECT_START"; break;
     case B_DIRECT_STOP: OperationName = "B_DIRECT_STOP"; break;
@@ -327,7 +340,7 @@ void BDirectWindowReader::DirectConnected (
     default: OperationName = "Unknown"; break;
   }
   vlog.debug ("BDirectWindowReader::DirectConnected doing %s #%d.",
-    OperationName, ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK);
+    OperationName, MainState);
 
   // HaikuOS lets us wait for up to 0.5 seconds, BeOS 3.0 seconds, then they
   // kill the program.  So don't wait too long, which can happen if a full
@@ -338,7 +351,7 @@ void BDirectWindowReader::DirectConnected (
   status_t LockErrorCode;
   LockErrorCode = m_ConnectionLock.LockWithTimeout(400000);
 
-  switch (ConnectionInfoPntr->buffer_state & B_DIRECT_MODE_MASK)
+  switch (MainState)
   {
     case B_DIRECT_START:
       m_Connected = true;
