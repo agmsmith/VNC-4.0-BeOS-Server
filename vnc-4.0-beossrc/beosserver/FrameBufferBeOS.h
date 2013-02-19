@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.9 2013/02/12 22:18:33 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.10 2013/02/18 23:00:07 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.10  2013/02/18 23:00:07  agmsmith
+ * Don't overwrite the screen size when displaying the technical problems
+ * dummy screen.  So now it will go back to the correct size once the
+ * problems are done.
+ *
  * Revision 1.9  2013/02/12 22:18:33  agmsmith
  * Add a gradient bitmap for when no screen buffer is available,
  * add a timeout to locking the frame buffer so that Haiku can
@@ -138,6 +143,9 @@ protected:
   ColourMapHolder m_ColourMap;
     // A copy of the screen's colour map, made when the pixel format was last
     // updated.
+
+  ColourMapHolder m_GrayMap;
+    // A runtime generated gray scale palette.
 
   char m_StatusString [20];
     // The currently displayed status message text.  The BView that draws the

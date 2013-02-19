@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.20 2013/02/18 23:00:07 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.21 2013/02/19 03:16:30 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.21  2013/02/19 03:16:30  agmsmith
+ * Ignore B_DIRECT_MODIFY messages about clipping and other stuff
+ * we don't care about.
+ *
  * Revision 1.20  2013/02/18 23:00:07  agmsmith
  * Don't overwrite the screen size when displaying the technical problems
  * dummy screen.  So now it will go back to the correct size once the
@@ -434,6 +438,15 @@ FrameBufferBeOS::FrameBufferBeOS () :
   m_StatusWindowPntr (NULL)
 {
   strcpy (m_StatusString, "VNC-BeOS");
+
+  m_GrayMap.m_BeOSColourMap.id = B_GRAY8;
+  for (int i = 0; i < 256; i++)
+  {
+    m_GrayMap.m_BeOSColourMap.color_list[i].red = i;
+    m_GrayMap.m_BeOSColourMap.color_list[i].green = i;
+    m_GrayMap.m_BeOSColourMap.color_list[i].blue = i;
+    m_GrayMap.m_BeOSColourMap.color_list[i].alpha = 255;
+  }
 }
 
 
@@ -523,12 +536,12 @@ FrameBufferBDirect::FrameBufferBDirect ()
 
   int i;
   for (i = 0; i < 256; i++)
-    m_TechnicalProblemsPicture[i] = (i & 32) ? 31 - i % 32 : i % 32;
+    m_TechnicalProblemsPicture[i] = i;
   for (; i < (int) sizeof (m_TechnicalProblemsPicture) - 255; i++)
-    m_TechnicalProblemsPicture[i] = 63;
+    m_TechnicalProblemsPicture[i] = 255;
   for (; i < (int) sizeof (m_TechnicalProblemsPicture); i++)
     m_TechnicalProblemsPicture[i] =
-      (sizeof (m_TechnicalProblemsPicture) - i - 1) % 32;
+      sizeof (m_TechnicalProblemsPicture) - i - 1;
 
   if (BDirectWindow::SupportsWindowMode ())
   {
@@ -603,7 +616,8 @@ unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
 
     data = (rdr::U8 *) m_TechnicalProblemsPicture;
     format.bpp = 8;
-    BeOSPixelFormat = B_CMAP8;
+    BeOSPixelFormat = B_GRAY8;
+    colourmap = &m_GrayMap;
     width_ = height_ = sizeof (m_TechnicalProblemsPicture);
     m_CachedStride = 0; // Repeat the same row of pixels for all scan lines.
   }
