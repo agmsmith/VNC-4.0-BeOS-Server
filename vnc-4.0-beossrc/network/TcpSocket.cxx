@@ -49,12 +49,17 @@
 #include <fcntl.h>
 #endif
 
+#include <stdlib.h>
 #include <network/TcpSocket.h>
 #include <rfb/util.h>
 #include <rfb/LogWriter.h>
 
 #ifndef VNC_SOCKLEN_T
-#define VNC_SOCKLEN_T int
+  #ifdef __HAIKU__
+    #define VNC_SOCKLEN_T socklen_t
+  #else
+    #define VNC_SOCKLEN_T int
+  #endif
 #endif
 
 #ifndef INADDR_NONE
