@@ -21,12 +21,13 @@
 #ifndef __RFB_RECT_INCLUDED__
 #define __RFB_RECT_INCLUDED__
 
-#ifndef max
-#define max(a,b)            (((a) > (b)) ? (a) : (b))
+// Avoid trampling on the STL Vector template, which uses plain min/max.
+#ifndef max_vnc
+  #define max_vnc(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
-#ifndef min
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
+#ifndef min_vnc
+  #define min_vnc(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
 
 namespace rfb {
@@ -70,20 +71,20 @@ namespace rfb {
     }
     inline Rect intersect(const Rect &r) const {
       Rect result;
-      result.tl.x = max(tl.x, r.tl.x);
-      result.tl.y = max(tl.y, r.tl.y);
-      result.br.x = max(min(br.x, r.br.x), result.tl.x);
-      result.br.y = max(min(br.y, r.br.y), result.tl.y);
+      result.tl.x = max_vnc(tl.x, r.tl.x);
+      result.tl.y = max_vnc(tl.y, r.tl.y);
+      result.br.x = max_vnc(min_vnc(br.x, r.br.x), result.tl.x);
+      result.br.y = max_vnc(min_vnc(br.y, r.br.y), result.tl.y);
       return result;
     }
     inline Rect union_boundary(const Rect &r) const {
       if (r.is_empty()) return *this;
       if (is_empty()) return r;
       Rect result;
-      result.tl.x = min(tl.x, r.tl.x);
-      result.tl.y = min(tl.y, r.tl.y);
-      result.br.x = max(br.x, r.br.x);
-      result.br.y = max(br.y, r.br.y);
+      result.tl.x = min_vnc(tl.x, r.tl.x);
+      result.tl.y = min_vnc(tl.y, r.tl.y);
+      result.br.x = max_vnc(br.x, r.br.x);
+      result.br.y = max_vnc(br.y, r.br.y);
       return result;
     }
     inline Rect translate(const Point &p) const {
