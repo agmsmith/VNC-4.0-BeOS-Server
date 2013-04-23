@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.15 2005/02/14 02:31:56 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.16 2013/02/18 17:30:00 agmsmith Exp $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,17 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.16  2013/02/18 17:30:00  agmsmith
+ * Now sends fake shift and other modifier key presses to enable typing of letters
+ * that are sent without the correct shift codes.  Like capital A on the iPad VNC
+ * that sends it without any shift keys being pressed before it.  Also lets the
+ * iPad send fancy codes like the currency symbols.  Added Euro to the table,
+ * though BeOS doesn't have a pressable key for it.  Also fixed several bugs
+ * with sending messages - wasn't sending some modifier key presses due to a
+ * bug, also sends the Bytes part of the message properly (it can be more than
+ * one byte for UTF-8 multibyte strings) and also send raw_char as the keycode for
+ * the unmodified key corresponding to the key being pressed.
+ *
  * Revision 1.15  2005/02/14 02:31:56  agmsmith
  * Fake cursor drawing code added.
  *
@@ -114,7 +125,7 @@ public:
     // The client has placed some new text on the clipboard.  Update the local
     // clipboard to match it.
 
-  uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, char *KeyAsString);
+  uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, const char *KeyAsString);
     // Check all the keys in the given array of strings for each keycode to
     // see if any contain the given UTF-8 string.  Returns zero if it can't
     // find it.
@@ -199,7 +210,7 @@ protected:
     // click rather than a single click.  Grabbed from the OS preferences when
     // the desktop starts up.
 
-  BInputDevice *m_EventInjectorPntr;
+  class BInputDevice *m_EventInjectorPntr;
     // Gives access to our Input Server add-on which lets us inject mouse and
     // keyboard event messages.  NULL if the connection isn't open or isn't
     // available.  Connected when the desktop starts, disconnected when it

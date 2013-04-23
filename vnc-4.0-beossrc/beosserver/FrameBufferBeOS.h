@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.10 2013/02/18 23:00:07 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.h,v 1.11 2013/02/19 20:47:56 agmsmith Exp $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.h,v $
+ * Revision 1.11  2013/02/19 20:47:56  agmsmith
+ * Add a full range gray scale palette so that the technical problems
+ * picture has a smoother gradient.
+ *
  * Revision 1.10  2013/02/18 23:00:07  agmsmith
  * Don't overwrite the screen size when displaying the technical problems
  * dummy screen.  So now it will go back to the correct size once the
@@ -203,10 +207,10 @@ public:
     // bitmap to match the format change.
 
 protected:
-  BScreen *m_BScreenPntr;
+  class BScreen *m_BScreenPntr;
     // The link back to the OS for the current screen settings.
 
-  BBitmap *m_ScreenCopyPntr;
+  class BBitmap *m_ScreenCopyPntr;
     // A copy of the screen, reallocated whenever the screen size or depth
     // changes, by UpdatePixelFormatEtc.
 

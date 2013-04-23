@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.31 2013/02/19 03:21:52 agmsmith Exp agmsmith $
+ * $Header: /BeData/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.32 2013/02/19 21:07:21 agmsmith Exp baron $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.32  2013/02/19 21:07:21  agmsmith
+ * Fixed bug in unmapped key codes with code number wrong due to
+ * loop optimisation that skipped updating the code.
+ *
  * Revision 1.31  2013/02/19 03:21:52  agmsmith
  * Doc wording.
  *
@@ -159,6 +163,10 @@
  * Initial revision
  */
 
+/* Posix headers. */
+
+#include <stdlib.h>
+
 /* VNC library headers. */
 
 #include <rfb/PixelBuffer.h>
@@ -249,7 +257,7 @@ static char UTF8_PageDown [] = {B_PAGE_DOWN, 0};
 typedef struct VNCKeyToUTF8Struct
 {
   uint16 vncKeyCode;
-  char  *utf8String;
+  const char *utf8String;
 } VNCKeyToUTF8Record, *VNCKeyToUTF8Pointer;
 
 extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
@@ -714,7 +722,7 @@ void SDesktopBeOS::clientCutText (const char* str, int len)
 
 uint8 SDesktopBeOS::FindKeyCodeFromMap (
   int32 *MapOffsetArray,
-  char *KeyAsString)
+  const char *KeyAsString)
 {
   unsigned int KeyCode;
   int32       *OffsetPntr;
@@ -725,10 +733,11 @@ uint8 SDesktopBeOS::FindKeyCodeFromMap (
   KeyCode++, OffsetPntr++)
   {
     StringPntr = m_KeyCharStrings + *OffsetPntr;
-    if (*StringPntr == 0)
-      continue; // Length of string (pascal style with length byte) is zero.
-    if (memcmp (StringPntr + 1, KeyAsString, *StringPntr) == 0 &&
-    KeyAsString [*StringPntr] == 0 /* look for NUL at end of search string */)
+    uint8 StringLen = (uint8) (*StringPntr);
+    if (StringLen == 0)
+      continue; // Length of string (Pascal style with length byte) is zero.
+    if (memcmp (StringPntr + 1, KeyAsString, StringLen) == 0 &&
+    KeyAsString [StringLen] == 0 /* look for NUL at end of search string */)
       return KeyCode;
   }
   return 0;
@@ -743,11 +752,11 @@ const char* SDesktopBeOS::FindMappedSymbolFromKeycode (
   // copied to a temporary global string, so copy them elsewhere if you want to
   // keep them.  Also not thread safe.
 
-  static char *EmptyString = "";
-  int32       *OffsetPntr;
-  static char  ReturnedString[8];
-  uint8        StringLength;
-  char        *StringPntr;
+  static const char *EmptyString = "";
+  int32             *OffsetPntr;
+  static char        ReturnedString[8];
+  uint8              StringLength;
+  char              *StringPntr;
 
   if (KeyCode >= 128)
     return EmptyString;
