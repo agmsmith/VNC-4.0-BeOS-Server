@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.22 2011/11/11 21:59:57 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.23 2013/02/11 22:31:17 agmsmith Exp $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.23  2013/02/11 22:31:17  agmsmith
+ * Detect network failures and restart networking, which included
+ * figuring out how to shut it all down first.  Now survives NetServer
+ * reboots.
+ *
  * Revision 1.22  2011/11/11 21:59:57  agmsmith
  * Bumped version number for new bigger cheap cursor, for iPad viewability.
  *
@@ -105,7 +110,12 @@
 /* Posix headers. */
 
 #include <errno.h>
-#include <socket.h>
+#include <stdlib.h>
+#include <posix/sys/types.h>
+#include <posix/sys/socket.h>
+#ifdef __HAIKU__
+  #include <posix/sys/select.h>
+#endif
 
 /* VNC library headers. */
 
@@ -145,7 +155,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.22 2011/11/11 21:59:57 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.23 2013/02/11 22:31:17 agmsmith Exp $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
