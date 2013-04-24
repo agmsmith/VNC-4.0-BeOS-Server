@@ -39,7 +39,8 @@ VncAuthPasswdParameter* SSecurityFactoryStandard::vncAuthPasswd = 0;
 
 SSecurity* SSecurityFactoryStandard::getSSecurity(int secType, bool noAuth) {
   switch (secType) {
-  case secTypeNone:    return new SSecurityNone();
+  case secTypeNone:
+    return new SSecurityNone();
   case secTypeVncAuth:
     if (!vncAuthPasswd)
       throw rdr::Exception("No VncAuthPasswdParameter defined!");
@@ -47,6 +48,7 @@ SSecurity* SSecurityFactoryStandard::getSSecurity(int secType, bool noAuth) {
   default:
     throw Exception("Unsupported secType?");
   }
+  return NULL;
 }
 
 VncAuthPasswdParameter::VncAuthPasswdParameter() {
