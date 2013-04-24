@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.33 2013/04/23 19:36:04 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.34 2013/04/24 15:19:15 agmsmith Exp $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.34  2013/04/24 15:19:15  agmsmith
+ * Fix PPC compile with extra function declaration.
+ *
  * Revision 1.33  2013/04/23 19:36:04  agmsmith
  * Updated types to compile with GCC 4.6.3, mostly const and some type changes.
  *
@@ -1211,6 +1214,28 @@ void SDesktopBeOS::MakeCheapCursor (void)
 #else
    7, 7);
 #endif
+
+#if defined(__POWERPC__) && BIG_CURSOR
+  // Need to reverse the byte order for big-endian CPUs.
+  {
+    static bool bReverseDone = false;
+    if (!bReverseDone)
+    {
+      int i;
+      bReverseDone = true;
+      for (i = 0; i < sizeof(CrossMask) / sizeof(CrossMask[0]); i++)
+      {
+        unsigned short Temp, Low, High;
+        Temp = CrossMask[i];
+        Low = (Temp & 0xFF);
+        High = ((Temp >> 8) & 0xFF);
+        Temp = ((Low << 8) | High );
+        CrossMask[i] = Temp;
+      }
+    }
+  } 
+#endif
+
 
   Black = m_FrameBufferBeOSPntr->getPF().pixelFromRGB (
     (rdr::U16) 0, (rdr::U16) 0, (rdr::U16) 0,
