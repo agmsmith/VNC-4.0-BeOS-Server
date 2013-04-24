@@ -18,6 +18,9 @@
  * Copyright (c) 1988,1989,1990,1991,1992 by Richard Outerbridge
  *	(GEnie : OUTER; CIS : [71755,204])
  */
+#ifdef __cplusplus 
+extern "C" {
+#endif
 
 #define EN0	0	/* MODE == encrypt */
 #define DE1	1	/* MODE == decrypt */
@@ -47,5 +50,8 @@ extern void des(unsigned char *, unsigned char *);
  * into the block at address 'to'.  They can be the same.
  */
 
+#ifdef __cplusplus 
+}
+#endif
 /* d3des.h V5.09 rwo 9208.04 15:06 Graven Imagery
  ********************************************************************/
