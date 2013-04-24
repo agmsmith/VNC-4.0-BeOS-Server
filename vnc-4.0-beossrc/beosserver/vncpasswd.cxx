@@ -30,8 +30,9 @@
 #include <Path.h>
 
 // Hack for BeOS, add a getpass function.  AGMS.
-// $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/vncpasswd.cxx,v 1.3 2005/05/29 23:01:21 agmsmith Exp agmsmith $
+// $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/vncpasswd.cxx,v 1.4 2013/04/23 20:27:08 agmsmith Exp $
 
+char *getpass (const char *Prompt); // Declaration needed for PPC compiler.
 char *getpass (const char *Prompt)
 {
   int         i;
@@ -74,7 +75,7 @@ char* prog;
 static void usage()
 {
   fprintf(stderr,"usage: %s [-pPassword] [file]\n",prog);
-  fprintf(stderr,"$Id:$");
+  fprintf(stderr,"$Id: vncpasswd.cxx,v 1.4 2013/04/23 20:27:08 agmsmith Exp $");
   exit(1);
 }
 
