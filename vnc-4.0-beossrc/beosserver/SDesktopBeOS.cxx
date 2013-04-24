@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /BeData/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.32 2013/02/19 21:07:21 agmsmith Exp baron $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.33 2013/04/23 19:36:04 agmsmith Exp $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.33  2013/04/23 19:36:04  agmsmith
+ * Updated types to compile with GCC 4.6.3, mostly const and some type changes.
+ *
  * Revision 1.32  2013/02/19 21:07:21  agmsmith
  * Fixed bug in unmapped key codes with code number wrong due to
  * loop optimisation that skipped updating the code.
@@ -260,6 +263,8 @@ typedef struct VNCKeyToUTF8Struct
   const char *utf8String;
 } VNCKeyToUTF8Record, *VNCKeyToUTF8Pointer;
 
+// Redundant declaration needed for PPC compiler.
+extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr);
 extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
 {
   int Result;
