@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.23 2013/02/11 22:31:17 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.24 2013/04/23 20:49:02 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.24  2013/04/23 20:49:02  agmsmith
+ * Adjusted types and headers to make it buildable in GCC4 under Haiku OS.
+ *
  * Revision 1.23  2013/02/11 22:31:17  agmsmith
  * Detect network failures and restart networking, which included
  * figuring out how to shut it all down first.  Now survives NetServer
@@ -155,7 +158,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.23 2013/02/11 22:31:17 agmsmith Exp $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.24 2013/04/23 20:49:02 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -167,6 +170,16 @@ static rfb::LogWriter vlog("ServerMain");
 static rfb::IntParameter port_number("PortNumber",
   "TCP/IP port on which the server will accept connections",
   5900);
+
+static rfb::IntParameter ThreadPriority ("ThreadPriority",
+  "Priority of the main thread, a value from 1 to 20.  The main thread "
+  "scans the video memory for changes to the picture on the screen and thus "
+  "uses a lot of CPU time.  5 is low priority (the default).  10 is "
+  "BeOS/Haiku normal thread priority.  15 is high priority.  We used to use "
+  "10 as the default, but on some CPU speed limited systems, this would "
+  "cause periodic clicks in the audio (not good for audio broadcasting "
+  "software), so the default is now 5.",
+  5);
 
 static rfb::VncAuthPasswdFileParameter vncAuthPasswd;
   // Creating this object is enough to register it with the
@@ -284,7 +297,7 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
       BMessage   *ClipMsgPntr;
       int32       TextLength;
       const char *TextPntr;
-  
+
       if (m_VNCServerPntr != NULL && be_clipboard->Lock())
       {
         if ((ClipMsgPntr = be_clipboard->Data ()) != NULL)
@@ -541,6 +554,20 @@ int main (int argc, char** argv)
         continue;
       usage(argv[0]);
     }
+
+    // Set the priority of the main polling thread.  If it's normal, than some
+    // computers don't have enough CPU time for other things and you get clicks
+    // in the audio.  So the default is to be lower than normal and we now need
+    // an option to set it back to normal.
+
+    thread_id MyThread = find_thread (NULL);
+    int32 NewPriority = ThreadPriority;
+    if (NewPriority < 1)
+      NewPriority = 1;
+    else if (NewPriority > 20)
+      NewPriority = 20;
+    vlog.debug ("Changing priority of main thread to %d.", NewPriority);
+    set_thread_priority (MyThread, NewPriority);
 
     MyApp.Run (); // Run the main event loop.
     ReturnCode = 0;
