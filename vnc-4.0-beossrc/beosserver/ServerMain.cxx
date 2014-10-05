@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.24 2013/04/23 20:49:02 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.25 2014/07/28 20:26:06 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.25  2014/07/28 20:26:06  agmsmith
+ * Change main thread priority to 5 (low) rather than the default of
+ * 10 (normal).  Also add a command line option to specify it.
+ *
  * Revision 1.24  2013/04/23 20:49:02  agmsmith
  * Adjusted types and headers to make it buildable in GCC4 under Haiku OS.
  *
@@ -141,7 +145,6 @@
 #include "SDesktopBeOS.h"
 
 
-
 /******************************************************************************
  * Global variables, and not-so-variable things too.  Grouped by functionality.
  */
@@ -158,7 +161,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.24 2013/04/23 20:49:02 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.25 2014/07/28 20:26:06 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
