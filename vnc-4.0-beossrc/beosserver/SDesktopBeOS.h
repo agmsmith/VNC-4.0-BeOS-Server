@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.16 2013/02/18 17:30:00 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.17 2013/04/23 19:36:04 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.17  2013/04/23 19:36:04  agmsmith
+ * Updated types to compile with GCC 4.6.3, mostly const and some type changes.
+ *
  * Revision 1.16  2013/02/18 17:30:00  agmsmith
  * Now sends fake shift and other modifier key presses to enable typing of letters
  * that are sent without the correct shift codes.  Like capital A on the iPad VNC
@@ -188,6 +191,18 @@ public:
     // obtained keymap).
 
 protected:
+  bigtime_t m_BackgroundGrabScreenDuration;
+    // How long did it take to grab the screen at the last full update?  If it
+    // is short enough (under 1/200 second), grab the screen on every sliver of
+    // background update so that scrubbing with the mouse will show the current
+    // screen contents.  That does happen on modern (circa 2012) computers when
+    // running BeOS / Haiku in a virtual machine (screen memory is very fast
+    // main memory).  Useful for the BScreen style capture (which is all you
+    // have in a VM since there usually aren't hardware drivers).  Useless for
+    // the direct access to video memory technique since it always gets the
+    // current contents anyway, but since the grab is a fast no-op, we do it
+    // too.
+
   int m_BackgroundNextScanLineY;
     // When doing incremental updates of the screen, m_BackgroundNextScanLineY
     // identifies the next scan line to start checking for changes to the
