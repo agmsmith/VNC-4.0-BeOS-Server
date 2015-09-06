@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.35 2013/04/24 18:34:27 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.36 2015/09/04 23:55:59 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,13 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.36  2015/09/04 23:55:59  agmsmith
+ * On fast computers grab the screen contents on every sliver update,
+ * not just at the start of every full screen update.  Lets you scrub
+ * the screen with the mouse just like you can with the direct access
+ * to video memory technique.  Makes VNC nicer on slow connections to
+ * a fast virtual machine.
+ *
  * Revision 1.35  2013/04/24 18:34:27  agmsmith
  * Fix PPC version cheap cursor graphics being mangled due to endienness.
  *
@@ -558,7 +565,7 @@ static void PrintModifierState(uint32 Modifiers, char *OutputBuffer)
  */
 
 SDesktopBeOS::SDesktopBeOS () :
-  m_BackgroundGrabScreenDuration (1000000),
+  m_BackgroundGrabScreenLastTime (0),
   m_BackgroundNextScanLineY (-1),
   m_BackgroundNumberOfScanLinesPerUpdate (32),
   m_BackgroundUpdateStartTime (0),
@@ -666,10 +673,9 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
           m_BackgroundNumberOfScanLinesPerUpdate = Height;
 
         m_BackgroundNextScanLineY = 0;
-        m_BackgroundUpdateStartTime = system_time ();
         m_FrameBufferBeOSPntr->GrabScreen ();
-        m_BackgroundGrabScreenDuration =
-          system_time () - m_BackgroundUpdateStartTime;
+        m_BackgroundGrabScreenLastTime = m_BackgroundUpdateStartTime =
+          system_time ();
       }
 
       // Mark the current work unit of scan lines as needing an update.
@@ -678,9 +684,15 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
         Width, m_BackgroundNumberOfScanLinesPerUpdate);
       if (RectangleToUpdate.br.y > Height)
         RectangleToUpdate.br.y = Height;
-       // Use current screen contents, if grabbing is fast enough.
-      if (m_BackgroundGrabScreenDuration < 5000 /* 1/200 second */)
+      // Updated current screen contents if half a second has gone by.
+      if (system_time () - m_BackgroundGrabScreenLastTime > 500000)
+      {
         m_FrameBufferBeOSPntr->GrabScreen ();
+        // Note that update of the time stamp is done AFTER the grab, in case
+        // the grab is really slow and takes a lot of time, so we always have
+        // half a second of regular operations before the next grab.
+        m_BackgroundGrabScreenLastTime = system_time ();
+      }
       rfb::Region RegionChanged (RectangleToUpdate);
       m_ServerPntr->add_changed (RegionChanged);
 
@@ -1242,7 +1254,7 @@ void SDesktopBeOS::MakeCheapCursor (void)
         CrossMask[i] = Temp;
       }
     }
-  } 
+  }
 #endif
 
 
