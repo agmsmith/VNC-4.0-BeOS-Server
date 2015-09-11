@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.36 2015/09/04 23:55:59 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.37 2015/09/06 16:52:54 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.37  2015/09/06 16:52:54  agmsmith
+ * Change background content refresh to be every half second.  That way when
+ * the user scrubbs the mouse, they'll see fairly recent content, even with
+ * the slow BScreen capture technique.  Formerly you'd have to wait for a
+ * full screen refresh before it would grab the actual screen contents.
+ *
  * Revision 1.36  2015/09/04 23:55:59  agmsmith
  * On fast computers grab the screen contents on every sliver update,
  * not just at the start of every full screen update.  Lets you scrub
@@ -266,13 +272,14 @@ static char UTF8_PageUp [] = {B_PAGE_UP, 0};
 static char UTF8_PageDown [] = {B_PAGE_DOWN, 0};
 
 
-// This table is used for converting VNC key codes into UTF-8 characters, but
-// only for the normal printable characters.  Function keys and modifier keys
-// (like shift) are handled separately.
+// This table is used for converting VNC key codes into UTF-8 characters, for
+// printable characters.  Function keys and modifier keys (like shift) are
+// handled separately.
 
 typedef struct VNCKeyToUTF8Struct
 {
   uint16 vncKeyCode;
+  uint16 suggestedBeOSKeyCode;
   const char *utf8String;
 } VNCKeyToUTF8Record, *VNCKeyToUTF8Pointer;
 
@@ -290,212 +297,244 @@ extern "C" int CompareVNCKeyRecords (const void *APntr, const void *BPntr)
 static VNCKeyToUTF8Record VNCKeyToUTF8Array [] =
 { // Note that this table is in increasing order of VNC key code,
   // so that a binary search can be done.
-  {/* 0x0020 */ XK_space, " "},
-  {/* 0x0021 */ XK_exclam, "!"},
-  {/* 0x0022 */ XK_quotedbl, "\""},
-  {/* 0x0023 */ XK_numbersign, "#"},
-  {/* 0x0024 */ XK_dollar, "$"},
-  {/* 0x0025 */ XK_percent, "%"},
-  {/* 0x0026 */ XK_ampersand, "&"},
-  {/* 0x0027 */ XK_apostrophe, "'"},
-  {/* 0x0028 */ XK_parenleft, "("},
-  {/* 0x0029 */ XK_parenright, ")"},
-  {/* 0x002a */ XK_asterisk, "*"},
-  {/* 0x002b */ XK_plus, "+"},
-  {/* 0x002c */ XK_comma, ","},
-  {/* 0x002d */ XK_minus, "-"},
-  {/* 0x002e */ XK_period, "."},
-  {/* 0x002f */ XK_slash, "/"},
-  {/* 0x0030 */ XK_0, "0"},
-  {/* 0x0031 */ XK_1, "1"},
-  {/* 0x0032 */ XK_2, "2"},
-  {/* 0x0033 */ XK_3, "3"},
-  {/* 0x0034 */ XK_4, "4"},
-  {/* 0x0035 */ XK_5, "5"},
-  {/* 0x0036 */ XK_6, "6"},
-  {/* 0x0037 */ XK_7, "7"},
-  {/* 0x0038 */ XK_8, "8"},
-  {/* 0x0039 */ XK_9, "9"},
-  {/* 0x003a */ XK_colon, ":"},
-  {/* 0x003b */ XK_semicolon, ";"},
-  {/* 0x003c */ XK_less, "<"},
-  {/* 0x003d */ XK_equal, "="},
-  {/* 0x003e */ XK_greater, ">"},
-  {/* 0x003f */ XK_question, "?"},
-  {/* 0x0040 */ XK_at, "@"},
-  {/* 0x0041 */ XK_A, "A"},
-  {/* 0x0042 */ XK_B, "B"},
-  {/* 0x0043 */ XK_C, "C"},
-  {/* 0x0044 */ XK_D, "D"},
-  {/* 0x0045 */ XK_E, "E"},
-  {/* 0x0046 */ XK_F, "F"},
-  {/* 0x0047 */ XK_G, "G"},
-  {/* 0x0048 */ XK_H, "H"},
-  {/* 0x0049 */ XK_I, "I"},
-  {/* 0x004a */ XK_J, "J"},
-  {/* 0x004b */ XK_K, "K"},
-  {/* 0x004c */ XK_L, "L"},
-  {/* 0x004d */ XK_M, "M"},
-  {/* 0x004e */ XK_N, "N"},
-  {/* 0x004f */ XK_O, "O"},
-  {/* 0x0050 */ XK_P, "P"},
-  {/* 0x0051 */ XK_Q, "Q"},
-  {/* 0x0052 */ XK_R, "R"},
-  {/* 0x0053 */ XK_S, "S"},
-  {/* 0x0054 */ XK_T, "T"},
-  {/* 0x0055 */ XK_U, "U"},
-  {/* 0x0056 */ XK_V, "V"},
-  {/* 0x0057 */ XK_W, "W"},
-  {/* 0x0058 */ XK_X, "X"},
-  {/* 0x0059 */ XK_Y, "Y"},
-  {/* 0x005a */ XK_Z, "Z"},
-  {/* 0x005b */ XK_bracketleft, "["},
-  {/* 0x005c */ XK_backslash, "\\"},
-  {/* 0x005d */ XK_bracketright, "]"},
-  {/* 0x005e */ XK_asciicircum, "^"},
-  {/* 0x005f */ XK_underscore, "_"},
-  {/* 0x0060 */ XK_grave, "`"},
-  {/* 0x0061 */ XK_a, "a"},
-  {/* 0x0062 */ XK_b, "b"},
-  {/* 0x0063 */ XK_c, "c"},
-  {/* 0x0064 */ XK_d, "d"},
-  {/* 0x0065 */ XK_e, "e"},
-  {/* 0x0066 */ XK_f, "f"},
-  {/* 0x0067 */ XK_g, "g"},
-  {/* 0x0068 */ XK_h, "h"},
-  {/* 0x0069 */ XK_i, "i"},
-  {/* 0x006a */ XK_j, "j"},
-  {/* 0x006b */ XK_k, "k"},
-  {/* 0x006c */ XK_l, "l"},
-  {/* 0x006d */ XK_m, "m"},
-  {/* 0x006e */ XK_n, "n"},
-  {/* 0x006f */ XK_o, "o"},
-  {/* 0x0070 */ XK_p, "p"},
-  {/* 0x0071 */ XK_q, "q"},
-  {/* 0x0072 */ XK_r, "r"},
-  {/* 0x0073 */ XK_s, "s"},
-  {/* 0x0074 */ XK_t, "t"},
-  {/* 0x0075 */ XK_u, "u"},
-  {/* 0x0076 */ XK_v, "v"},
-  {/* 0x0077 */ XK_w, "w"},
-  {/* 0x0078 */ XK_x, "x"},
-  {/* 0x0079 */ XK_y, "y"},
-  {/* 0x007a */ XK_z, "z"},
-  {/* 0x007b */ XK_braceleft, "{"},
-  {/* 0x007c */ XK_bar, "|"},
-  {/* 0x007d */ XK_braceright, "}"},
-  {/* 0x007e */ XK_asciitilde, "~"},
-  {/* 0x00a0 */ XK_nobreakspace, " "}, // If compiler barfs use: "\0xc2\0xa0"
-  {/* 0x00a1 */ XK_exclamdown, "¡"},
-  {/* 0x00a2 */ XK_cent, "¢"},
-  {/* 0x00a3 */ XK_sterling, "£"},
-  {/* 0x00a4 */ XK_currency, "¤"},
-  {/* 0x00a5 */ XK_yen, "¥"},
-  {/* 0x00a6 */ XK_brokenbar, "¦"},
-  {/* 0x00a7 */ XK_section, "§"},
-  {/* 0x00a8 */ XK_diaeresis, "¨"},
-  {/* 0x00a9 */ XK_copyright, "©"},
-  {/* 0x00aa */ XK_ordfeminine, "ª"},
-  {/* 0x00ab */ XK_guillemotleft, "«"},
-  {/* 0x00ac */ XK_notsign, "¬"},
-  {/* 0x00ad */ XK_hyphen, "­"},
-  {/* 0x00ae */ XK_registered, "®"},
-  {/* 0x00af */ XK_macron, "¯"},
-  {/* 0x00b0 */ XK_degree, "°"},
-  {/* 0x00b1 */ XK_plusminus, "±"},
-  {/* 0x00b2 */ XK_twosuperior, "²"},
-  {/* 0x00b3 */ XK_threesuperior, "³"},
-  {/* 0x00b4 */ XK_acute, "´"},
-  {/* 0x00b5 */ XK_mu, "µ"},
-  {/* 0x00b6 */ XK_paragraph, "¶"},
-  {/* 0x00b7 */ XK_periodcentered, "·"},
-  {/* 0x00b8 */ XK_cedilla, "¸"},
-  {/* 0x00b9 */ XK_onesuperior, "¹"},
-  {/* 0x00ba */ XK_masculine, "º"},
-  {/* 0x00bb */ XK_guillemotright, "»"},
-  {/* 0x00bc */ XK_onequarter, "¼"},
-  {/* 0x00bd */ XK_onehalf, "½"},
-  {/* 0x00be */ XK_threequarters, "¾"},
-  {/* 0x00bf */ XK_questiondown, "¿"},
-  {/* 0x00c0 */ XK_Agrave, "À"},
-  {/* 0x00c1 */ XK_Aacute, "Á"},
-  {/* 0x00c2 */ XK_Acircumflex, "Â"},
-  {/* 0x00c3 */ XK_Atilde, "Ã"},
-  {/* 0x00c4 */ XK_Adiaeresis, "Ä"},
-  {/* 0x00c5 */ XK_Aring, "Å"},
-  {/* 0x00c6 */ XK_AE, "Æ"},
-  {/* 0x00c7 */ XK_Ccedilla, "Ç"},
-  {/* 0x00c8 */ XK_Egrave, "È"},
-  {/* 0x00c9 */ XK_Eacute, "É"},
-  {/* 0x00ca */ XK_Ecircumflex, "Ê"},
-  {/* 0x00cb */ XK_Ediaeresis, "Ë"},
-  {/* 0x00cc */ XK_Igrave, "Ì"},
-  {/* 0x00cd */ XK_Iacute, "Í"},
-  {/* 0x00ce */ XK_Icircumflex, "Î"},
-  {/* 0x00cf */ XK_Idiaeresis, "Ï"},
-  {/* 0x00d0 */ XK_ETH, "Ð"},
-  {/* 0x00d1 */ XK_Ntilde, "Ñ"},
-  {/* 0x00d2 */ XK_Ograve, "Ò"},
-  {/* 0x00d3 */ XK_Oacute, "Ó"},
-  {/* 0x00d4 */ XK_Ocircumflex, "Ô"},
-  {/* 0x00d5 */ XK_Otilde, "Õ"},
-  {/* 0x00d6 */ XK_Odiaeresis, "Ö"},
-  {/* 0x00d7 */ XK_multiply, "×"},
-  {/* 0x00d8 */ XK_Ooblique, "Ø"},
-  {/* 0x00d9 */ XK_Ugrave, "Ù"},
-  {/* 0x00da */ XK_Uacute, "Ú"},
-  {/* 0x00db */ XK_Ucircumflex, "Û"},
-  {/* 0x00dc */ XK_Udiaeresis, "Ü"},
-  {/* 0x00dd */ XK_Yacute, "Ý"},
-  {/* 0x00de */ XK_THORN, "Þ"},
-  {/* 0x00df */ XK_ssharp, "ß"},
-  {/* 0x00e0 */ XK_agrave, "à"},
-  {/* 0x00e1 */ XK_aacute, "á"},
-  {/* 0x00e2 */ XK_acircumflex, "â"},
-  {/* 0x00e3 */ XK_atilde, "ã"},
-  {/* 0x00e4 */ XK_adiaeresis, "ä"},
-  {/* 0x00e5 */ XK_aring, "å"},
-  {/* 0x00e6 */ XK_ae, "æ"},
-  {/* 0x00e7 */ XK_ccedilla, "ç"},
-  {/* 0x00e8 */ XK_egrave, "è"},
-  {/* 0x00e9 */ XK_eacute, "é"},
-  {/* 0x00ea */ XK_ecircumflex, "ê"},
-  {/* 0x00eb */ XK_ediaeresis, "ë"},
-  {/* 0x00ec */ XK_igrave, "ì"},
-  {/* 0x00ed */ XK_iacute, "í"},
-  {/* 0x00ee */ XK_icircumflex, "î"},
-  {/* 0x00ef */ XK_idiaeresis, "ï"},
-  {/* 0x00f0 */ XK_eth, "ð"},
-  {/* 0x00f1 */ XK_ntilde, "ñ"},
-  {/* 0x00f2 */ XK_ograve, "ò"},
-  {/* 0x00f3 */ XK_oacute, "ó"},
-  {/* 0x00f4 */ XK_ocircumflex, "ô"},
-  {/* 0x00f5 */ XK_otilde, "õ"},
-  {/* 0x00f6 */ XK_odiaeresis, "ö"},
-  {/* 0x00f7 */ XK_division, "÷"},
-  {/* 0x00f8 */ XK_oslash, "ø"},
-  {/* 0x00f9 */ XK_ugrave, "ù"},
-  {/* 0x00fa */ XK_uacute, "ú"},
-  {/* 0x00fb */ XK_ucircumflex, "û"},
-  {/* 0x00fc */ XK_udiaeresis, "ü"},
-  {/* 0x00fd */ XK_yacute, "ý"},
-  {/* 0x00fe */ XK_thorn, "þ"},
-  {/* 0x00ff */ XK_ydiaeresis, "ÿ"},
-  {/* 0x20ac */ XK_EuroSign, "€"},
-  {/* 0xFF08 */ XK_BackSpace, UTF8_Backspace},
-  {/* 0xFF09 */ XK_Tab, UTF8_Tab},
-  {/* 0xFF0D */ XK_Return, UTF8_Return},
-  {/* 0xFF1B */ XK_Escape, UTF8_Escape},
-  {/* 0xFF50 */ XK_Home, UTF8_Home},
-  {/* 0xFF51 */ XK_Left, UTF8_LeftArrow},
-  {/* 0xFF52 */ XK_Up, UTF8_UpArrow},
-  {/* 0xFF53 */ XK_Right, UTF8_RightArrow},
-  {/* 0xFF54 */ XK_Down, UTF8_DownArrow},
-  {/* 0xFF55 */ XK_Page_Up, UTF8_PageUp},
-  {/* 0xFF56 */ XK_Page_Down, UTF8_PageDown},
-  {/* 0xFF57 */ XK_End, UTF8_End},
-  {/* 0xFF63 */ XK_Insert, UTF8_Insert},
-  {/* 0xFFFF */ XK_Delete, UTF8_Delete}
+  {/* 0x0020 */ XK_space, 94, " "},
+  {/* 0x0021 */ XK_exclam, 18, "!"},
+  {/* 0x0022 */ XK_quotedbl, 70, "\""},
+  {/* 0x0023 */ XK_numbersign, 20, "#"},
+  {/* 0x0024 */ XK_dollar, 21, "$"},
+  {/* 0x0025 */ XK_percent, 22, "%"},
+  {/* 0x0026 */ XK_ampersand, 24, "&"},
+  {/* 0x0027 */ XK_apostrophe, 70, "'"},
+  {/* 0x0028 */ XK_parenleft, 26, "("},
+  {/* 0x0029 */ XK_parenright, 27, ")"},
+  {/* 0x002a */ XK_asterisk, 25, "*"},
+  {/* 0x002b */ XK_plus, 29, "+"},
+  {/* 0x002c */ XK_comma, 83, ","},
+  {/* 0x002d */ XK_minus, 28, "-"},
+  {/* 0x002e */ XK_period, 84, "."},
+  {/* 0x002f */ XK_slash, 85, "/"},
+  {/* 0x0030 */ XK_0, 27, "0"},
+  {/* 0x0031 */ XK_1, 18, "1"},
+  {/* 0x0032 */ XK_2, 19, "2"},
+  {/* 0x0033 */ XK_3, 20, "3"},
+  {/* 0x0034 */ XK_4, 21, "4"},
+  {/* 0x0035 */ XK_5, 22, "5"},
+  {/* 0x0036 */ XK_6, 23, "6"},
+  {/* 0x0037 */ XK_7, 24, "7"},
+  {/* 0x0038 */ XK_8, 25, "8"},
+  {/* 0x0039 */ XK_9, 26, "9"},
+  {/* 0x003a */ XK_colon, 69, ":"},
+  {/* 0x003b */ XK_semicolon, 69, ";"},
+  {/* 0x003c */ XK_less, 83, "<"},
+  {/* 0x003d */ XK_equal, 29, "="},
+  {/* 0x003e */ XK_greater, 84, ">"},
+  {/* 0x003f */ XK_question, 85, "?"},
+  {/* 0x0040 */ XK_at, 19, "@"},
+  {/* 0x0041 */ XK_A, 60, "A"},
+  {/* 0x0042 */ XK_B, 80, "B"},
+  {/* 0x0043 */ XK_C, 78, "C"},
+  {/* 0x0044 */ XK_D, 62, "D"},
+  {/* 0x0045 */ XK_E, 41, "E"},
+  {/* 0x0046 */ XK_F, 63, "F"},
+  {/* 0x0047 */ XK_G, 64, "G"},
+  {/* 0x0048 */ XK_H, 65, "H"},
+  {/* 0x0049 */ XK_I, 46, "I"},
+  {/* 0x004a */ XK_J, 66, "J"},
+  {/* 0x004b */ XK_K, 67, "K"},
+  {/* 0x004c */ XK_L, 68, "L"},
+  {/* 0x004d */ XK_M, 82, "M"},
+  {/* 0x004e */ XK_N, 81, "N"},
+  {/* 0x004f */ XK_O, 47, "O"},
+  {/* 0x0050 */ XK_P, 48, "P"},
+  {/* 0x0051 */ XK_Q, 39, "Q"},
+  {/* 0x0052 */ XK_R, 42, "R"},
+  {/* 0x0053 */ XK_S, 61, "S"},
+  {/* 0x0054 */ XK_T, 43, "T"},
+  {/* 0x0055 */ XK_U, 45, "U"},
+  {/* 0x0056 */ XK_V, 79, "V"},
+  {/* 0x0057 */ XK_W, 40, "W"},
+  {/* 0x0058 */ XK_X, 77, "X"},
+  {/* 0x0059 */ XK_Y, 44, "Y"},
+  {/* 0x005a */ XK_Z, 76, "Z"},
+  {/* 0x005b */ XK_bracketleft, 49, "["},
+  {/* 0x005c */ XK_backslash, 51, "\\"},
+  {/* 0x005d */ XK_bracketright, 50, "]"},
+  {/* 0x005e */ XK_asciicircum, 23, "^"},
+  {/* 0x005f */ XK_underscore, 28, "_"},
+  {/* 0x0060 */ XK_grave, 17, "`"},
+  {/* 0x0061 */ XK_a, 60, "a"},
+  {/* 0x0062 */ XK_b, 80, "b"},
+  {/* 0x0063 */ XK_c, 78, "c"},
+  {/* 0x0064 */ XK_d, 62, "d"},
+  {/* 0x0065 */ XK_e, 41, "e"},
+  {/* 0x0066 */ XK_f, 63, "f"},
+  {/* 0x0067 */ XK_g, 64, "g"},
+  {/* 0x0068 */ XK_h, 65, "h"},
+  {/* 0x0069 */ XK_i, 46, "i"},
+  {/* 0x006a */ XK_j, 66, "j"},
+  {/* 0x006b */ XK_k, 67, "k"},
+  {/* 0x006c */ XK_l, 68, "l"},
+  {/* 0x006d */ XK_m, 82, "m"},
+  {/* 0x006e */ XK_n, 81, "n"},
+  {/* 0x006f */ XK_o, 47, "o"},
+  {/* 0x0070 */ XK_p, 48, "p"},
+  {/* 0x0071 */ XK_q, 39, "q"},
+  {/* 0x0072 */ XK_r, 42, "r"},
+  {/* 0x0073 */ XK_s, 61, "s"},
+  {/* 0x0074 */ XK_t, 43, "t"},
+  {/* 0x0075 */ XK_u, 45, "u"},
+  {/* 0x0076 */ XK_v, 79, "v"},
+  {/* 0x0077 */ XK_w, 40, "w"},
+  {/* 0x0078 */ XK_x, 77, "x"},
+  {/* 0x0079 */ XK_y, 44, "y"},
+  {/* 0x007a */ XK_z, 76, "z"},
+  {/* 0x007b */ XK_braceleft, 49, "{"},
+  {/* 0x007c */ XK_bar, 51, "|"},
+  {/* 0x007d */ XK_braceright, 50, "}"},
+  {/* 0x007e */ XK_asciitilde, 17, "~"},
+  {/* 0x00a0 */ XK_nobreakspace, 94, " "}, // If compiler barfs use: "\0xc2\0xa0"
+  {/* 0x00a1 */ XK_exclamdown, 18, "¡"},
+  {/* 0x00a2 */ XK_cent, 21, "¢"},
+  {/* 0x00a3 */ XK_sterling, 20, "£"},
+  {/* 0x00a4 */ XK_currency, 0, "¤"},
+  {/* 0x00a5 */ XK_yen, 44, "¥"},
+  {/* 0x00a6 */ XK_brokenbar, 0, "¦"},
+  {/* 0x00a7 */ XK_section, 24, "§"},
+  {/* 0x00a8 */ XK_diaeresis, 69, "¨"},
+  {/* 0x00a9 */ XK_copyright, 64, "©"},
+  {/* 0x00aa */ XK_ordfeminine, 26, "ª"},
+  {/* 0x00ab */ XK_guillemotleft, 26, "«"},
+  {/* 0x00ac */ XK_notsign, 51, "¬"},
+  {/* 0x00ad */ XK_hyphen, 0, "­"},
+  {/* 0x00ae */ XK_registered, 42, "®"},
+  {/* 0x00af */ XK_macron, 0, "¯"},
+  {/* 0x00b0 */ XK_degree, 25, "°"},
+  {/* 0x00b1 */ XK_plusminus, 29, "±"},
+  {/* 0x00b2 */ XK_twosuperior, 0, "²"},
+  {/* 0x00b3 */ XK_threesuperior, 0, "³"},
+  {/* 0x00b4 */ XK_acute, 41, "´"},
+  {/* 0x00b5 */ XK_mu, 82, "µ"},
+  {/* 0x00b6 */ XK_paragraph, 24, "¶"},
+  {/* 0x00b7 */ XK_periodcentered, 0, "·"},
+  {/* 0x00b8 */ XK_cedilla, 0, "¸"},
+  {/* 0x00b9 */ XK_onesuperior, 0, "¹"},
+  {/* 0x00ba */ XK_masculine, 27, "º"},
+  {/* 0x00bb */ XK_guillemotright, 126, "»"},
+  {/* 0x00bc */ XK_onequarter, 0, "¼"},
+  {/* 0x00bd */ XK_onehalf, 0, "½"},
+  {/* 0x00be */ XK_threequarters, 0, "¾"},
+  {/* 0x00bf */ XK_questiondown, 85, "¿"},
+  {/* 0x00c0 */ XK_Agrave, 60, "À"},
+  {/* 0x00c1 */ XK_Aacute, 0, "Á"},
+  {/* 0x00c2 */ XK_Acircumflex, 0, "Â"},
+  {/* 0x00c3 */ XK_Atilde, 0, "Ã"},
+  {/* 0x00c4 */ XK_Adiaeresis, 0, "Ä"},
+  {/* 0x00c5 */ XK_Aring, 60, "Å"},
+  {/* 0x00c6 */ XK_AE, 68, "Æ"},
+  {/* 0x00c7 */ XK_Ccedilla, 78, "Ç"},
+  {/* 0x00c8 */ XK_Egrave, 0, "È"},
+  {/* 0x00c9 */ XK_Eacute, 0, "É"},
+  {/* 0x00ca */ XK_Ecircumflex, 0, "Ê"},
+  {/* 0x00cb */ XK_Ediaeresis, 0, "Ë"},
+  {/* 0x00cc */ XK_Igrave, 0, "Ì"},
+  {/* 0x00cd */ XK_Iacute, 0, "Í"},
+  {/* 0x00ce */ XK_Icircumflex, 0, "Î"},
+  {/* 0x00cf */ XK_Idiaeresis, 0, "Ï"},
+  {/* 0x00d0 */ XK_ETH, 0, "Ð"},
+  {/* 0x00d1 */ XK_Ntilde, 81, "Ñ"},
+  {/* 0x00d2 */ XK_Ograve, 0, "Ò"},
+  {/* 0x00d3 */ XK_Oacute, 0, "Ó"},
+  {/* 0x00d4 */ XK_Ocircumflex, 0, "Ô"},
+  {/* 0x00d5 */ XK_Otilde, 0, "Õ"},
+  {/* 0x00d6 */ XK_Odiaeresis, 0, "Ö"},
+  {/* 0x00d7 */ XK_multiply, 0, "×"},
+  {/* 0x00d8 */ XK_Ooblique, 47, "Ø"},
+  {/* 0x00d9 */ XK_Ugrave, 0, "Ù"},
+  {/* 0x00da */ XK_Uacute, 0, "Ú"},
+  {/* 0x00db */ XK_Ucircumflex, 0, "Û"},
+  {/* 0x00dc */ XK_Udiaeresis, 0, "Ü"},
+  {/* 0x00dd */ XK_Yacute, 0, "Ý"},
+  {/* 0x00de */ XK_THORN, 0, "Þ"},
+  {/* 0x00df */ XK_ssharp, 80, "ß"},
+  {/* 0x00e0 */ XK_agrave, 0, "à"},
+  {/* 0x00e1 */ XK_aacute, 0, "á"},
+  {/* 0x00e2 */ XK_acircumflex, 0, "â"},
+  {/* 0x00e3 */ XK_atilde, 0, "ã"},
+  {/* 0x00e4 */ XK_adiaeresis, 0, "ä"},
+  {/* 0x00e5 */ XK_aring, 60, "å"},
+  {/* 0x00e6 */ XK_ae, 68, "æ"},
+  {/* 0x00e7 */ XK_ccedilla, 78, "ç"},
+  {/* 0x00e8 */ XK_egrave, 0, "è"},
+  {/* 0x00e9 */ XK_eacute, 0, "é"},
+  {/* 0x00ea */ XK_ecircumflex, 0, "ê"},
+  {/* 0x00eb */ XK_ediaeresis, 0, "ë"},
+  {/* 0x00ec */ XK_igrave, 0, "ì"},
+  {/* 0x00ed */ XK_iacute, 0, "í"},
+  {/* 0x00ee */ XK_icircumflex, 0, "î"},
+  {/* 0x00ef */ XK_idiaeresis, 0, "ï"},
+  {/* 0x00f0 */ XK_eth, 0, "ð"},
+  {/* 0x00f1 */ XK_ntilde, 81, "ñ"},
+  {/* 0x00f2 */ XK_ograve, 0, "ò"},
+  {/* 0x00f3 */ XK_oacute, 0, "ó"},
+  {/* 0x00f4 */ XK_ocircumflex, 0, "ô"},
+  {/* 0x00f5 */ XK_otilde, 0, "õ"},
+  {/* 0x00f6 */ XK_odiaeresis, 0, "ö"},
+  {/* 0x00f7 */ XK_division, 85, "÷"},
+  {/* 0x00f8 */ XK_oslash, 47, "ø"},
+  {/* 0x00f9 */ XK_ugrave, 0, "ù"},
+  {/* 0x00fa */ XK_uacute, 0, "ú"},
+  {/* 0x00fb */ XK_ucircumflex, 0, "û"},
+  {/* 0x00fc */ XK_udiaeresis, 0, "ü"},
+  {/* 0x00fd */ XK_yacute, 0, "ý"},
+  {/* 0x00fe */ XK_thorn, 0, "þ"},
+  {/* 0x00ff */ XK_ydiaeresis, 0, "ÿ"},
+  {/* 0x20ac */ XK_EuroSign, 0, "€"},
+  {/* 0xFF08 */ XK_BackSpace, 30, UTF8_Backspace},
+  {/* 0xFF09 */ XK_Tab, 38, UTF8_Tab},
+  {/* 0xFF0D */ XK_Return, 71, UTF8_Return},
+  {/* 0xFF1B */ XK_Escape, 1, UTF8_Escape},
+  {/* 0xFF50 */ XK_Home, 32, UTF8_Home},
+  {/* 0xFF51 */ XK_Left, 97, UTF8_LeftArrow},
+  {/* 0xFF52 */ XK_Up, 87, UTF8_UpArrow},
+  {/* 0xFF53 */ XK_Right, 99, UTF8_RightArrow},
+  {/* 0xFF54 */ XK_Down, 98, UTF8_DownArrow},
+  {/* 0xFF55 */ XK_Page_Up, 33, UTF8_PageUp},
+  {/* 0xFF56 */ XK_Page_Down, 54, UTF8_PageDown},
+  {/* 0xFF57 */ XK_End, 53, UTF8_End},
+  {/* 0xFF63 */ XK_Insert, 31, UTF8_Insert},
+  {/* 0xFF67 */ XK_Menu, 104, "Menu"},
+  {/* 0xFF80 */ XK_KP_Space, 94, " "},
+  {/* 0xFF89 */ XK_KP_Tab, 38, UTF8_Tab},
+  {/* 0xFF8D */ XK_KP_Enter, 91, UTF8_Return},
+  {/* 0xFF95 */ XK_KP_Home, 55, UTF8_Home},
+  {/* 0xFF96 */ XK_KP_Left, 72, UTF8_LeftArrow},
+  {/* 0xFF97 */ XK_KP_Up, 56, UTF8_UpArrow},
+  {/* 0xFF98 */ XK_KP_Right, 74, UTF8_RightArrow},
+  {/* 0xFF99 */ XK_KP_Down, 89, UTF8_DownArrow},
+  {/* 0xFF9A */ XK_KP_Page_Up, 57, UTF8_PageUp},
+  {/* 0xFF9B */ XK_KP_Page_Down, 90, UTF8_PageDown},
+  {/* 0xFF9C */ XK_KP_End, 88, UTF8_End},
+  {/* 0xFF9D */ XK_KP_Begin, 73, "KP5"},
+  {/* 0xFF9E */ XK_KP_Insert, 100, UTF8_Insert},
+  {/* 0xFF9F */ XK_KP_Delete, 101, UTF8_Delete},
+  {/* 0xFFBD */ XK_KP_Equal, 29, "="},
+  {/* 0xFFAA */ XK_KP_Multiply, 36, "*"},
+  {/* 0xFFAB */ XK_KP_Add, 58, "+"},
+  {/* 0xFFAC */ XK_KP_Separator, 83, ","},
+  {/* 0xFFAD */ XK_KP_Subtract, 37, "-"},
+  {/* 0xFFAE */ XK_KP_Decimal, 101, "."},
+  {/* 0xFFAF */ XK_KP_Divide, 35, "/"},
+  {/* 0xFFB0 */ XK_KP_0, 100, "0"},
+  {/* 0xFFB1 */ XK_KP_1, 88, "1"},
+  {/* 0xFFB2 */ XK_KP_2, 89, "2"},
+  {/* 0xFFB3 */ XK_KP_3, 90, "3"},
+  {/* 0xFFB4 */ XK_KP_4, 72, "4"},
+  {/* 0xFFB5 */ XK_KP_5, 73, "5"},
+  {/* 0xFFB6 */ XK_KP_6, 74, "6"},
+  {/* 0xFFB7 */ XK_KP_7, 55, "7"},
+  {/* 0xFFB8 */ XK_KP_8, 56, "8"},
+  {/* 0xFFB9 */ XK_KP_9, 57, "9"},
+  {/* 0xFFFF */ XK_Delete, 101, UTF8_Delete}
 };
 
 
@@ -512,7 +551,6 @@ static inline void SetKeyState (
   uint8 BitMask;
   uint8 Index;
 
-
   if (KeyCode <= 0 || KeyCode >= 128)
     return; // Keycodes are from 1 to 127, zero means no key defined.
 
@@ -527,10 +565,9 @@ static inline void SetKeyState (
 
 static void PrintModifierState(uint32 Modifiers, char *OutputBuffer)
 {
-  // Write a readable description of the modifier keys to the buffer, which
+  // Append a readable description of the modifier keys to the buffer, which
   // should be 135 characters or longer to be safe.
 
-  OutputBuffer[0] = 0;
   if (Modifiers & B_CAPS_LOCK)
     strcat(OutputBuffer, "CAPS_LOCK ");
   if (Modifiers & B_SCROLL_LOCK)
@@ -558,6 +595,129 @@ static void PrintModifierState(uint32 Modifiers, char *OutputBuffer)
   if (OutLen > 0)
     OutputBuffer[OutLen-1] = 0; // Remove trailing space.
 }
+
+
+static const char * NameOfScanCode(uint32 ScanCode)
+{
+  // Returns a readable description of the BeOS keyboard scan code, which can
+  // be up to 18 characters long.
+
+  static const char * KeyNames [] = {
+    "Null", // 0
+    "Esc", // 1
+    "F1", // 2
+    "F2", // 3
+    "F3", // 4 
+    "F4", // 5 
+    "F5", // 6 
+    "F6", // 7
+    "F7", // 8
+    "F8", // 9
+    "F9", // 10
+    "F10", // 11
+    "F11", // 12
+    "F12", // 13
+    "PrintScreen-SysRq", // 14
+    "ScrollLock", // 15
+    "Pause-Break", // 16
+    "`~", // 17
+    "1!", // 18
+    "2@", // 19
+    "3#", // 20
+    "4$", // 21
+    "5%", // 22
+    "6^", // 23
+    "7&", // 24
+    "8*", // 25
+    "9(", // 26
+    "0)", // 27
+    "-_", // 28
+    "=+", // 29
+    "Backspace", // 30
+    "Insert", // 31
+    "Home", // 32
+    "PageUp", // 33
+    "NumLock", // 34
+    "/KP", // 35
+    "*KP", // 36
+    "-KP", // 37
+    "Tab", // 38
+    "qQ", // 39
+    "wW", // 40
+    "eE", // 41
+    "rR", // 42
+    "tT", // 43
+    "yY", // 44
+    "uU", // 45
+    "iI", // 46
+    "oO", // 47
+    "pP", // 48
+    "[{", // 49
+    "]}", // 50
+    "\\|", // 51
+    "Delete", // 52
+    "End", // 53
+    "PageDown", // 54
+    "Home7KP", // 55
+    "Up8KP", // 56
+    "PageUp9KP", // 57
+    "+KP", // 58
+    "CapsLock", // 59
+    "aA", // 60
+    "sS", // 61
+    "dD", // 62
+    "fF", // 63
+    "gG", // 64
+    "hH", // 65
+    "jJ", // 66
+    "kK", // 67
+    "lL", // 68
+    ";:", // 69
+    "'\"", // 70
+    "Enter", // 71
+    "Left4KP", // 72
+    "Nop5KP", // 73
+    "Right6KP", // 74
+    "LeftShift", // 75
+    "zZ", // 76
+    "xX", // 77
+    "cC", // 78
+    "vV", // 79
+    "bB", // 80
+    "nN", // 81
+    "mM", // 82
+    ",<", // 83
+    ".>", // 84
+    "/?", // 85
+    "RightShift", // 86
+    "Up", // 87
+    "End1KP", // 88
+    "Down2KP", // 89
+    "PageDown3KP", // 90
+    "EnterKP", // 91
+    "LeftControl", // 92
+    "LeftAlt", // 93
+    "Space", // 94
+    "RightAlt", // 95
+    "RightControl", // 96
+    "Left", // 97
+    "Down", // 98
+    "Right", // 99
+    "Insert0KP", // 100
+    "Delete.KP", // 101
+    "LeftWindows", // 102
+    "RightWindows", // 103
+    "Menu" // 104
+  };
+  const unsigned int KeyNamesSize = sizeof (KeyNames) / sizeof (KeyNames[0]);
+
+  if (ScanCode >= KeyNamesSize)
+    return "?";
+
+  return KeyNames [ScanCode];
+}
+
+
 
 
 /******************************************************************************
@@ -751,16 +911,54 @@ void SDesktopBeOS::clientCutText (const char* str, int len)
 
 uint8 SDesktopBeOS::FindKeyCodeFromMap (
   int32 *MapOffsetArray,
-  const char *KeyAsString)
+  const char *KeyAsString,
+  bool KeyPadPreferred)
 {
+  int          Delta;
+  int          Index;
   unsigned int KeyCode;
   int32       *OffsetPntr;
   char        *StringPntr;
 
-  OffsetPntr = MapOffsetArray + 1 /* Skip over [0]. */;
-  for (KeyCode = 1 /* zero not valid */; KeyCode <= 127;
-  KeyCode++, OffsetPntr++)
+  // If looking for the keycode that produces a symbol, we may have multiple
+  // choices - like the number keys on the main keyboard and on the keypad.  To
+  // give preference to the ones on the main keypad, a search is done with
+  // those keys first.  To give preference to the keypad keys, the search is
+  // done in reverse order.
+
+  static const uint8 KeyCodesWithKeypadLast [] =
+  { // Main keyboard key codes first.
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+    32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+    52, 53, 54, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+    75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87,
+    92, 93, 94, 95, 96, 97, 98, 99, 102, 103, 104, 105, 106, 107, 108, 109,
+    110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
+    125, 126, 127,
+
+    // Keypad codes.
+    34, 35, 36, 37, 55, 56, 57, 58, 72, 73, 74, 88, 89, 90, 91, 100, 101
+  };
+
+  const int ArraySize =
+    sizeof (KeyCodesWithKeypadLast) / sizeof (KeyCodesWithKeypadLast[0]);
+
+  if (KeyPadPreferred)
   {
+    Index = ArraySize - 1;
+    Delta = -1;
+  }
+  else // Normal forward search.
+  {
+    Index = 1 /* zero not valid */;
+    Delta = 1;
+  }
+
+  for ( ; Index > 0 && Index < ArraySize; Index += Delta)
+  {
+    KeyCode = KeyCodesWithKeypadLast[Index];
+    OffsetPntr = MapOffsetArray + KeyCode;
     StringPntr = m_KeyCharStrings + *OffsetPntr;
     uint8 StringLen = (uint8) (*StringPntr);
     if (StringLen == 0)
@@ -825,10 +1023,10 @@ rfb::Point SDesktopBeOS::getFbSize ()
 void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 {
   uint32              ChangedModifiers;
-  char                ControlCharacterAsUTF8 [2];
   BMessage            EventMessage;
   uint8               KeyCode;
   char                KeyAsString [16];
+  bool                KeyPadUsed;
   VNCKeyToUTF8Record  KeyToUTF8SearchData;
   VNCKeyToUTF8Pointer KeyToUTF8Pntr;
   key_info            NewKeyState;
@@ -858,12 +1056,14 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
      // the standard US keyboard layout.  Other keyboards may have other
      // physical key codes for control and alt, so the default is to have alt
      // be the command key and control be the control key.
+
      case XK_Control_L: ChangedModifiers =
       ((m_KeyMapPntr->left_control_key != 93) ?
       B_LEFT_CONTROL_KEY : B_LEFT_COMMAND_KEY); break;
     case XK_Control_R: ChangedModifiers =
       ((m_KeyMapPntr->left_control_key != 93) ?
       B_RIGHT_CONTROL_KEY : B_RIGHT_COMMAND_KEY); break;
+
     case XK_Alt_L: ChangedModifiers =
       ((m_KeyMapPntr->left_control_key != 93) ?
       B_LEFT_COMMAND_KEY : B_LEFT_CONTROL_KEY); break;
@@ -871,8 +1071,13 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
       ((m_KeyMapPntr->left_control_key != 93) ?
       B_RIGHT_COMMAND_KEY : B_RIGHT_CONTROL_KEY); break;
 
-    case XK_Meta_L: ChangedModifiers = B_LEFT_OPTION_KEY; break;
-    case XK_Meta_R: ChangedModifiers = B_RIGHT_OPTION_KEY; break;
+    case XK_Meta_L: // RealVNC sends left Windows as this.
+    case XK_Super_L: // TigerVNC sends left Windows as this.
+      ChangedModifiers = B_LEFT_OPTION_KEY; break;
+    case XK_Meta_R: // RealVNC sends right Windows as this.
+    case XK_Super_R: // TigerVNC sends right Windows as this.
+      ChangedModifiers = B_RIGHT_OPTION_KEY; break;
+
     default: ChangedModifiers = 0;
   }
 
@@ -892,7 +1097,7 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     }
     UpdateDerivedModifiers (m_UserModifierState);
     UpdateDerivedModifiers (NewKeyState.modifiers);
-    UpdateModifierKeys (NewKeyState);
+    WriteModifiersToKeyState (NewKeyState);
 
     if (NewKeyState.modifiers != m_LastKeyState.modifiers)
     {
@@ -908,6 +1113,11 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
         B_UINT8_TYPE, &NewKeyState.key_states, 16);
       m_EventInjectorPntr->Control ('EInj', &EventMessage);
       EventMessage.MakeEmpty ();
+
+      char TempString[200];
+      strcpy (TempString, "Modifiers changed to: ");
+      PrintModifierState (NewKeyState.modifiers, TempString);
+      vlog.debug ("%s", TempString);
     }
 
     SendUnmappedKeys (m_LastKeyState, NewKeyState);
@@ -921,6 +1131,8 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   // also are a direct press; they don't try to fiddle with the shift keys.
 
   KeyCode = 0;
+  KeyPadUsed = (key >= XK_KP_Space && key <= XK_KP_9);
+
   if (key >= XK_F1 && key <= XK_F12)
     KeyCode = B_F1_KEY + key - XK_F1;
   else if (key == XK_Scroll_Lock)
@@ -932,8 +1144,8 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   if (KeyCode != 0)
   {
-    vlog.debug ("%s functionish key code %d.",
-      down ? "Pressed" : "Released", KeyCode);
+    vlog.debug ("%s functionish key code %d (%s).",
+      down ? "Pressed" : "Released", KeyCode, NameOfScanCode (KeyCode));
 
     SetKeyState (m_LastKeyState, KeyCode, down);
 
@@ -953,36 +1165,18 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     return;
   }
 
-  // Special case for control keys.  If control is down (but Command isn't,
-  // since if Command is down then control is ignored by BeOS) then convert the
-  // VNC keycodes into control characters.  That's because VNC sends control-A
-  // as the same code for the letter A.
+  // The rest of the keys have an equivalent UTF-8 character.  Convert the
+  // key code into a UTF-8 character, which will later be used to determine
+  // which keys to press.
 
-  KeyToUTF8Pntr = NULL;
-  if ((m_LastKeyState.modifiers & B_COMMAND_KEY) == 0 &&
-  (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0)
-  {
-    key = (key & 31); // Force it to a control character.
-    KeyToUTF8SearchData.vncKeyCode = key; // Not really searching.
-    ControlCharacterAsUTF8 [0] = key;
-    ControlCharacterAsUTF8 [1] = 0;
-    KeyToUTF8SearchData.utf8String = ControlCharacterAsUTF8;
-    KeyToUTF8Pntr = &KeyToUTF8SearchData;
-  }
-  else
-  {
-    // The rest of the keys have an equivalent UTF-8 character.  Convert the
-    // key code into a UTF-8 character, which will later be used to determine
-    // which keys to press.
+  KeyToUTF8SearchData.vncKeyCode = key;
+  KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
+    &KeyToUTF8SearchData,
+    VNCKeyToUTF8Array,
+    sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
+    sizeof (VNCKeyToUTF8Record),
+    CompareVNCKeyRecords);
 
-    KeyToUTF8SearchData.vncKeyCode = key;
-    KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
-      &KeyToUTF8SearchData,
-      VNCKeyToUTF8Array,
-      sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
-      sizeof (VNCKeyToUTF8Record),
-      CompareVNCKeyRecords);
-  }
   if (KeyToUTF8Pntr == NULL)
   {
     vlog.info ("VNC keycode $%04X (%s) isn't recognised, ignoring it.",
@@ -990,79 +1184,74 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     return; // Key not handled, ignore it.
   }
 
+  // Have a corresponding UTF-8 string we are wanting to type.  For debugging,
+  // make a printable version.
+
+  char KeyAsReadableUTF8String [40];
+  {
+    const char *pSource = KeyToUTF8Pntr->utf8String;
+    char *pDest = KeyAsReadableUTF8String;
+    while (*pSource != 0 &&
+    pDest < KeyAsReadableUTF8String + sizeof (KeyAsReadableUTF8String) - 4)
+    {
+      if (*pSource < 32 || *pSource == 127)
+      {
+        sprintf (pDest, "%02d", (int) *pSource);
+        pSource++;
+        pDest += strlen (pDest);
+      }
+      else
+        *pDest++ = *pSource++;
+    }
+    *pDest = 0;
+  }
+
   // Look for the UTF-8 string in the keymap tables which are currently active
   // (reflecting the current modifier keys) to see which key code it is.
 
   strcpy (KeyAsString, KeyToUTF8Pntr->utf8String);
   KeyCode = 0;
-  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0 &&
-  /* Can't type control characters while the command key is down */
-  (m_LastKeyState.modifiers & B_COMMAND_KEY) == 0)
-  {
-    /* This keymap doesn't work - converts control-D to the END key etc.
-    KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->control_map, KeyAsString);
-    */
-    if (key <= 0) // Control-space on the keyboard for NUL byte.
-      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, " ");
-    else if (key <= 26) // Control A to Z use the letter keys.
-    {
-      ControlCharacterAsUTF8 [0] = key + 0x60; // Lower case letter a to z.
-      ControlCharacterAsUTF8 [1] = 0;
-      KeyCode = FindKeyCodeFromMap (
-        m_KeyMapPntr->normal_map, ControlCharacterAsUTF8);
-    }
-    else if (key == 27)
-      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "[");
-    else if (key == 28)
-      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "\\");
-    else if (key == 29)
-      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->normal_map, "]");
-    else if (key == 30)
-      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->shift_map, "^");
-    else if (key == 31)
-      KeyCode = FindKeyCodeFromMap (m_KeyMapPntr->shift_map, "_");
-
-    if (KeyCode == 0)
-      KeyCode = 1; // The rest get what's usually the escape key.
-  }
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_caps_shift_map, KeyAsString);
+      m_KeyMapPntr->option_caps_shift_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_CAPS_LOCK))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_caps_map, KeyAsString);
+      m_KeyMapPntr->option_caps_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_shift_map, KeyAsString);
+      m_KeyMapPntr->option_shift_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_map, KeyAsString);
+      m_KeyMapPntr->option_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->caps_shift_map, KeyAsString);
+      m_KeyMapPntr->caps_shift_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CAPS_LOCK))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->caps_map, KeyAsString);
+      m_KeyMapPntr->caps_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->shift_map, KeyAsString);
+      m_KeyMapPntr->shift_map, KeyAsString, KeyPadUsed);
   if (KeyCode == 0)
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->normal_map, KeyAsString);
+      m_KeyMapPntr->normal_map, KeyAsString, KeyPadUsed);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY))
+    KeyCode = FindKeyCodeFromMap ( /* Control is last since weird. */
+      m_KeyMapPntr->control_map, KeyAsString, KeyPadUsed);
 
   if (KeyCode != 0)
   {
     // Got a key that works with the current modifier settings.  Simulate
     // pressing it.
 
-    vlog.debug ("%s regular key code %d.",
-      down ? "Pressed" : "Released", KeyCode);
+    vlog.debug ("%s regular key code %d (%s) to achieve \"%s\".",
+      down ? "Pressed" : "Released", KeyCode, NameOfScanCode (KeyCode),
+      KeyAsReadableUTF8String);
 
     SetKeyState (m_LastKeyState, KeyCode, down);
     SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
@@ -1073,17 +1262,16 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     if (m_LastKeyState.modifiers != m_UserModifierState && !down)
     {
       char TempString[400];
-      sprintf (TempString, "Restoring modifiers from (");
-      PrintModifierState (m_LastKeyState.modifiers,
-        TempString + strlen (TempString));
+      strcpy (TempString, "Restoring modifiers from (");
+      PrintModifierState (m_LastKeyState.modifiers, TempString);
       strcat (TempString, ") to user's original modifiers of (");
-      PrintModifierState (m_UserModifierState, TempString + strlen (TempString));
+      PrintModifierState (m_UserModifierState, TempString);
       strcat (TempString, ").");
       vlog.debug ("%s", TempString);
 
       NewKeyState = m_LastKeyState;
       NewKeyState.modifiers = m_UserModifierState;
-      UpdateModifierKeys (NewKeyState);
+      WriteModifiersToKeyState (NewKeyState);
 
       EventMessage.what = B_MODIFIERS_CHANGED;
       EventMessage.AddInt64 ("when", system_time ());
@@ -1110,35 +1298,38 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   uint32 NewModifier = 0;
   if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->normal_map, KeyAsString)))
+  m_KeyMapPntr->normal_map, KeyAsString, KeyPadUsed)))
     NewModifier = 0;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->shift_map, KeyAsString)))
+  m_KeyMapPntr->shift_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->caps_map, KeyAsString)))
+  m_KeyMapPntr->caps_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_CAPS_LOCK;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->caps_shift_map, KeyAsString)))
+  m_KeyMapPntr->caps_shift_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_CAPS_LOCK | B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_map, KeyAsString)))
+  m_KeyMapPntr->option_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_LEFT_OPTION_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_shift_map, KeyAsString)))
+  m_KeyMapPntr->option_shift_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_LEFT_OPTION_KEY | B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_caps_map, KeyAsString)))
+  m_KeyMapPntr->option_caps_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_LEFT_OPTION_KEY | B_CAPS_LOCK;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_caps_shift_map, KeyAsString)))
+  m_KeyMapPntr->option_caps_shift_map, KeyAsString, KeyPadUsed)))
     NewModifier = B_LEFT_OPTION_KEY | B_CAPS_LOCK | B_LEFT_SHIFT_KEY;
+  else if (0 != (KeyCode = FindKeyCodeFromMap (
+  m_KeyMapPntr->control_map, KeyAsString, KeyPadUsed)))
+    NewModifier = B_LEFT_CONTROL_KEY;
 
   if (KeyCode == 0)
   {
     vlog.debug ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
       "which BeOS keys need to be \"pressed\" to achieve that.  Ignoring it.",
-      key, down ? "down" : "up", KeyAsString);
+      key, down ? "down" : "up", KeyAsReadableUTF8String);
     return;
   }
 
@@ -1149,18 +1340,18 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   { // Debug message block.
     char TempString[400];
     sprintf (TempString, "VNC keycode $%04X (%s) maps to \"%s\", but we need "
-      "to change modifiers from (", key, down ? "down" : "up", KeyAsString);
-    PrintModifierState (m_LastKeyState.modifiers,
-      TempString + strlen (TempString));
+      "to change modifiers from (", key, down ? "down" : "up",
+      KeyAsReadableUTF8String);
+    PrintModifierState (m_LastKeyState.modifiers, TempString);
     strcat (TempString, ") to (");
-    PrintModifierState (NewModifier, TempString + strlen (TempString));
+    PrintModifierState (NewModifier, TempString);
     strcat (TempString, ").");
     vlog.debug ("%s", TempString);
   }
 
   NewKeyState = m_LastKeyState;
   NewKeyState.modifiers = NewModifier;
-  UpdateModifierKeys (NewKeyState);
+  WriteModifiersToKeyState (NewKeyState);
 
   if (NewKeyState.modifiers != m_LastKeyState.modifiers)
   {
@@ -1178,8 +1369,8 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   // Now send the actual key, using the modified modifier keys.
 
-  vlog.debug ("%s temporarily shifted key code %d.",
-    down ? "Pressed" : "Released", KeyCode);
+  vlog.debug ("%s temporarily shifted key code %d (%s).",
+    down ? "Pressed" : "Released", KeyCode, NameOfScanCode (KeyCode));
 
   SetKeyState (m_LastKeyState, KeyCode, down);
   SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
@@ -1495,8 +1686,9 @@ void SDesktopBeOS::SendUnmappedKeys (
       DeltaBit = ((OldBits ^ NewBits) & Mask);
       if (DeltaBit == 0)
         continue; // Key hasn't changed.
-      vlog.debug ("%s unmapped key code %d.",
-        (NewBits & Mask) ? "Pressed" : "Released", KeyCode);
+      vlog.debug ("%s unmapped key code %d (%s).",
+        (NewBits & Mask) ? "Pressed" : "Released", KeyCode,
+        NameOfScanCode (KeyCode));
       EventMessage.what =
         (NewBits & Mask) ? B_UNMAPPED_KEY_DOWN : B_UNMAPPED_KEY_UP;
       EventMessage.AddInt64 ("when", system_time ());
@@ -1574,6 +1766,95 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
   if (m_KeyMapPntr == NULL || m_KeyCharStrings == NULL)
     throw rfb::Exception ("SDesktopBeOS::start: get_key_map has failed, "
     "so we can't simulate the keyboard buttons being pressed!");
+
+#if 1 // Dump out the key maps.
+  printf ("Keymap Dump, version %d:\n", (int) m_KeyMapPntr->version);
+  printf ("CapsLock key: %d (%s), ScrollLock: %d (%s), NumLock: %d (%s)\n",
+    (int) m_KeyMapPntr->caps_key, NameOfScanCode (m_KeyMapPntr->caps_key),
+    (int) m_KeyMapPntr->scroll_key, NameOfScanCode (m_KeyMapPntr->scroll_key),
+    (int) m_KeyMapPntr->num_key, NameOfScanCode (m_KeyMapPntr->num_key));
+  printf ("Left Shift: %d (%s), Right Shift: %d (%s)\n",
+    (int) m_KeyMapPntr->left_shift_key,
+    NameOfScanCode (m_KeyMapPntr->left_shift_key),
+    (int) m_KeyMapPntr->right_shift_key,
+    NameOfScanCode (m_KeyMapPntr->right_shift_key));
+  printf ("Left Command: %d (%s), Right Command: %d (%s)\n",
+    (int) m_KeyMapPntr->left_command_key,
+    NameOfScanCode (m_KeyMapPntr->left_command_key),
+    (int) m_KeyMapPntr->right_command_key,
+    NameOfScanCode (m_KeyMapPntr->right_command_key));
+  printf ("Left Control: %d (%s), Right Control: %d (%s)\n",
+    (int) m_KeyMapPntr->left_control_key,
+    NameOfScanCode (m_KeyMapPntr->left_control_key),
+    (int) m_KeyMapPntr->right_control_key,
+    NameOfScanCode (m_KeyMapPntr->right_control_key));
+  printf ("Left Option: %d (%s), Right Option: %d (%s)\n",
+    (int) m_KeyMapPntr->left_option_key,
+    NameOfScanCode (m_KeyMapPntr->left_option_key),
+    (int) m_KeyMapPntr->right_option_key,
+    NameOfScanCode (m_KeyMapPntr->right_option_key));
+  printf ("Menu key: %d (%s), Lock settings: 0x%X\n",
+    (int) m_KeyMapPntr->menu_key,
+    NameOfScanCode (m_KeyMapPntr->menu_key),
+    (int) m_KeyMapPntr->lock_settings);
+
+  int32 * Maps[9];
+  Maps[0] = m_KeyMapPntr->control_map;
+  Maps[1] = m_KeyMapPntr->option_caps_shift_map;
+  Maps[2] = m_KeyMapPntr->option_caps_map;
+  Maps[3] = m_KeyMapPntr->option_shift_map;
+  Maps[4] = m_KeyMapPntr->option_map;
+  Maps[5] = m_KeyMapPntr->caps_shift_map;
+  Maps[6] = m_KeyMapPntr->caps_map;
+  Maps[7] = m_KeyMapPntr->shift_map;
+  Maps[8] = m_KeyMapPntr->normal_map;
+  char * MapNames[9] =
+  {
+    "control_map",
+    "option_caps_shift_map",
+    "option_caps_map",
+    "option_shift_map",
+    "option_map",
+    "caps_shift_map",
+    "caps_map",
+    "shift_map",
+    "normal_map"
+  };
+
+  for (int i = 0; i < 9; i++)
+  {
+    printf ("\n%s:\n", MapNames[i]);
+    bool SomethingPrinted = false;
+    for (int j = 0; j < 128; j++)
+    {
+      unsigned char SymbolString [80];
+      char  *StringPntr;
+
+      StringPntr = m_KeyCharStrings + Maps[i][j];
+      uint8 StringLen = (uint8) (*StringPntr);
+      if (StringLen != 0)
+      {
+        SomethingPrinted = true;
+        printf ("%d=%s=", j, NameOfScanCode (j));
+        memcpy (SymbolString, StringPntr + 1, StringLen);
+        SymbolString[StringLen] = 0;
+        if (SymbolString[0] < 32 || SymbolString[0] == 127)
+        {
+          for (int k = 0; k < StringLen; k++)
+            printf ("%02d ", SymbolString[k]);
+        }
+        else
+          printf ("%s ", SymbolString);
+      }
+      if ((j & 7) == 7)
+      {
+        if (SomethingPrinted)
+          printf ("\n");
+        SomethingPrinted = false;
+      }
+    }
+  }
+#endif // Dump keymaps.
 }
 
 
@@ -1629,14 +1910,16 @@ void SDesktopBeOS::UpdateDerivedModifiers (
 }
 
 
-void SDesktopBeOS::UpdateModifierKeys (
+void SDesktopBeOS::WriteModifiersToKeyState (
   key_info &KeyState)
 {
   if (m_KeyMapPntr == NULL)
     return; // Can't do anything more without it.
 
   // Update the pressed keys to reflect the modifiers.  Use the keymap to find
-  // the keycode for the actual modifier key.
+  // the keycode for the actual modifier key.  Note that some (right control)
+  // may be zero to show no key defined, but then key #0 doesn't exist so
+  // pressing it hopefully won't do much.
 
   uint32 TempModifiers = KeyState.modifiers;
 

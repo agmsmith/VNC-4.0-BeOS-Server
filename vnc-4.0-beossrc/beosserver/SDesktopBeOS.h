@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.18 2015/09/04 23:55:59 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.19 2015/09/06 16:52:54 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.19  2015/09/06 16:52:54  agmsmith
+ * Change background content refresh to be every half second.  That way when
+ * the user scrubbs the mouse, they'll see fairly recent content, even with
+ * the slow BScreen capture technique.  Formerly you'd have to wait for a
+ * full screen refresh before it would grab the actual screen contents.
+ *
  * Revision 1.18  2015/09/04 23:55:59  agmsmith
  * On fast computers grab the screen contents on every sliver update,
  * not just at the start of every full screen update.  Lets you scrub
@@ -135,7 +141,8 @@ public:
     // The client has placed some new text on the clipboard.  Update the local
     // clipboard to match it.
 
-  uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, const char *KeyAsString);
+  uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, const char *KeyAsString,
+    bool KeypadPreferred);
     // Check all the keys in the given array of strings for each keycode to
     // see if any contain the given UTF-8 string.  Returns zero if it can't
     // find it.
@@ -191,7 +198,7 @@ public:
     // control, L&R shift, etc) and sets the derived modifier flags (plain
     // control, plain shift, etc) to match.
 
-  void UpdateModifierKeys (key_info &KeyState);
+  void WriteModifiersToKeyState (key_info &KeyState);
     // Looks at the modifier flags for individual modifier keys (left and right
     // control, L&R shift, etc) and update the keyboard bits to show the
     // corresponding buttons being pressed down or up (using the previously
