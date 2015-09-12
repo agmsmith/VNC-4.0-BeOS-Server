@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.38 2015/09/11 21:14:09 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.39 2015/09/12 00:32:08 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,12 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.39  2015/09/12 00:32:08  agmsmith
+ * Now with working keypad and better handling of odd keyboard combinations.
+ * Also the dumb screen grab (BScreen) method now does updates once in a while
+ * so that you can scrub with the mouse and see new screen contents, not the
+ * stuff from the last full screen refresh.
+ *
  * Revision 1.38  2015/09/11 21:14:09  agmsmith
  * Work in progress, trying to detect keypad keys.  Lots of debugging output
  * added too, including dump of keymap tables.
@@ -1832,7 +1838,7 @@ void SDesktopBeOS::start (rfb::VNCServer* vs)
     throw rfb::Exception ("SDesktopBeOS::start: get_key_map has failed, "
     "so we can't simulate the keyboard buttons being pressed!");
 
-#if 1 // Dump out the key maps.
+#if 0 // Dump out the key maps.
   printf ("Keymap Dump, version %d:\n", (int) m_KeyMapPntr->version);
   printf ("CapsLock key: %d (%s), ScrollLock: %d (%s), NumLock: %d (%s)\n",
     (int) m_KeyMapPntr->caps_key, NameOfScanCode (m_KeyMapPntr->caps_key),
