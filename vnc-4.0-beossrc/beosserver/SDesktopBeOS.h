@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.19 2015/09/06 16:52:54 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.h,v 1.20 2015/09/11 21:14:09 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.h,v $
+ * Revision 1.20  2015/09/11 21:14:09  agmsmith
+ * Work in progress, trying to detect keypad keys.  Lots of debugging output
+ * added too, including dump of keymap tables.
+ *
  * Revision 1.19  2015/09/06 16:52:54  agmsmith
  * Change background content refresh to be every half second.  That way when
  * the user scrubbs the mouse, they'll see fairly recent content, even with
@@ -142,10 +146,11 @@ public:
     // clipboard to match it.
 
   uint8 FindKeyCodeFromMap (int32 *MapOffsetArray, const char *KeyAsString,
-    bool KeypadPreferred);
-    // Check all the keys in the given array of strings for each keycode to
-    // see if any contain the given UTF-8 string.  Returns zero if it can't
-    // find it.
+    uint16 SuggestedKeyCode = 0);
+    // Check all the keys in the given array of strings for each keycode to see
+    // if any contain the given UTF-8 string.  Returns zero if it can't find
+    // it.  If a suggested key code is provided, it is tried first.  That's
+    // useful for distinguishing between keypad keys and regular keys.
 
   const char* FindMappedSymbolFromKeycode (
     int32 *MapOffsetArray, uint8 KeyCode);
@@ -168,6 +173,11 @@ public:
 
   virtual void pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask);
     // The remote user has moved the mouse or clicked a button.
+
+  void RevertToUsersModifierKeys ();
+    // Release the various extra modifier keys (shift, option, etc) pressed
+    // temporarily to get a character that VNC specified which wasn't in the
+    // normal keymap.
 
   void SendMappedKeyMessage (uint8 KeyCode, bool down,
     const char *KeyAsString, BMessage &EventMessage);

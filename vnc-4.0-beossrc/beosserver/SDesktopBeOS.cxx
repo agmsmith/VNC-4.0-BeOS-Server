@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.37 2015/09/06 16:52:54 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.38 2015/09/11 21:14:09 agmsmith Exp agmsmith $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.38  2015/09/11 21:14:09  agmsmith
+ * Work in progress, trying to detect keypad keys.  Lots of debugging output
+ * added too, including dump of keymap tables.
+ *
  * Revision 1.37  2015/09/06 16:52:54  agmsmith
  * Change background content refresh to be every half second.  That way when
  * the user scrubbs the mouse, they'll see fairly recent content, even with
@@ -592,7 +596,7 @@ static void PrintModifierState(uint32 Modifiers, char *OutputBuffer)
     strcat(OutputBuffer, "RIGHT_OPTION ");
 
   size_t OutLen = strlen (OutputBuffer);
-  if (OutLen > 0)
+  if (OutLen > 0 && OutputBuffer[OutLen-1] == ' ')
     OutputBuffer[OutLen-1] = 0; // Remove trailing space.
 }
 
@@ -607,9 +611,9 @@ static const char * NameOfScanCode(uint32 ScanCode)
     "Esc", // 1
     "F1", // 2
     "F2", // 3
-    "F3", // 4 
-    "F4", // 5 
-    "F5", // 6 
+    "F3", // 4
+    "F4", // 5
+    "F5", // 6
     "F6", // 7
     "F7", // 8
     "F8", // 9
@@ -912,52 +916,30 @@ void SDesktopBeOS::clientCutText (const char* str, int len)
 uint8 SDesktopBeOS::FindKeyCodeFromMap (
   int32 *MapOffsetArray,
   const char *KeyAsString,
-  bool KeyPadPreferred)
+  uint16 SuggestedKeyCode)
 {
-  int          Delta;
-  int          Index;
   unsigned int KeyCode;
   int32       *OffsetPntr;
   char        *StringPntr;
 
   // If looking for the keycode that produces a symbol, we may have multiple
   // choices - like the number keys on the main keyboard and on the keypad.  To
-  // give preference to the ones on the main keypad, a search is done with
-  // those keys first.  To give preference to the keypad keys, the search is
-  // done in reverse order.
+  // give preference to a particular key, the suggested one is looked at first.
 
-  static const uint8 KeyCodesWithKeypadLast [] =
-  { // Main keyboard key codes first.
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-    32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-    52, 53, 54, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
-    75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87,
-    92, 93, 94, 95, 96, 97, 98, 99, 102, 103, 104, 105, 106, 107, 108, 109,
-    110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
-    125, 126, 127,
-
-    // Keypad codes.
-    34, 35, 36, 37, 55, 56, 57, 58, 72, 73, 74, 88, 89, 90, 91, 100, 101
-  };
-
-  const int ArraySize =
-    sizeof (KeyCodesWithKeypadLast) / sizeof (KeyCodesWithKeypadLast[0]);
-
-  if (KeyPadPreferred)
+  if (SuggestedKeyCode > 0 && SuggestedKeyCode <= 127)
   {
-    Index = ArraySize - 1;
-    Delta = -1;
-  }
-  else // Normal forward search.
-  {
-    Index = 1 /* zero not valid */;
-    Delta = 1;
+    OffsetPntr = MapOffsetArray + SuggestedKeyCode;
+    StringPntr = m_KeyCharStrings + *OffsetPntr;
+    uint8 StringLen = (uint8) (*StringPntr);
+
+    if (StringLen != 0 &&
+    memcmp (StringPntr + 1, KeyAsString, StringLen) == 0 &&
+    KeyAsString [StringLen] == 0)
+      return SuggestedKeyCode;
   }
 
-  for ( ; Index > 0 && Index < ArraySize; Index += Delta)
+  for (KeyCode = 1; KeyCode <= 127; KeyCode++)
   {
-    KeyCode = KeyCodesWithKeypadLast[Index];
     OffsetPntr = MapOffsetArray + KeyCode;
     StringPntr = m_KeyCharStrings + *OffsetPntr;
     uint8 StringLen = (uint8) (*StringPntr);
@@ -1023,10 +1005,10 @@ rfb::Point SDesktopBeOS::getFbSize ()
 void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 {
   uint32              ChangedModifiers;
+  char                ControlCharacterAsUTF8 [2];
   BMessage            EventMessage;
   uint8               KeyCode;
   char                KeyAsString [16];
-  bool                KeyPadUsed;
   VNCKeyToUTF8Record  KeyToUTF8SearchData;
   VNCKeyToUTF8Pointer KeyToUTF8Pntr;
   key_info            NewKeyState;
@@ -1131,7 +1113,6 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   // also are a direct press; they don't try to fiddle with the shift keys.
 
   KeyCode = 0;
-  KeyPadUsed = (key >= XK_KP_Space && key <= XK_KP_9);
 
   if (key >= XK_F1 && key <= XK_F12)
     KeyCode = B_F1_KEY + key - XK_F1;
@@ -1165,9 +1146,9 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     return;
   }
 
-  // The rest of the keys have an equivalent UTF-8 character.  Convert the
-  // key code into a UTF-8 character, which will later be used to determine
-  // which keys to press.
+  // The rest of the keys have an equivalent UTF-8 character.  Convert the key
+  // code into a UTF-8 character, which will later be used to determine which
+  // keys to press.
 
   KeyToUTF8SearchData.vncKeyCode = key;
   KeyToUTF8Pntr = (VNCKeyToUTF8Pointer) bsearch (
@@ -1176,6 +1157,60 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     sizeof (VNCKeyToUTF8Array) / sizeof (VNCKeyToUTF8Record),
     sizeof (VNCKeyToUTF8Record),
     CompareVNCKeyRecords);
+
+  // Special case for control keys.  If control is down (but Command isn't,
+  // since if Command is down then control is ignored by BeOS) then convert the
+  // VNC keycodes for A-Z and a few conventional others into control
+  // characters.  That's because VNC sends control-A as the same code for the
+  // letter A.  Do it after finding the normal UTF-8 string, so we can make use
+  // of the suggested key code.
+
+  if ((m_LastKeyState.modifiers & B_COMMAND_KEY) == 0 &&
+  (m_LastKeyState.modifiers & B_CONTROL_KEY) != 0)
+  {
+    int ControlCode = -1;
+
+    if (key >= XK_A && key <= XK_Z)
+      ControlCode = key - XK_A + 1;
+    else if (key >= XK_a && key <= XK_z)
+      ControlCode = key - XK_a + 1;
+    else if (key == XK_2 || key == XK_at || key == XK_space)
+      ControlCode = 0;
+    else if (key == XK_bracketleft || key == XK_braceleft)
+      ControlCode = 27;
+    else if (key == XK_backslash || key == XK_bar)
+      ControlCode = 28;
+    else if (key == XK_bracketright || key == XK_braceright)
+      ControlCode = 29;
+    else if (key == XK_6 || key == XK_asciicircum)
+      ControlCode = 30;
+    else if (key == XK_minus || key == XK_underscore)
+      ControlCode = 31;
+    else if (key == XK_BackSpace || key == XK_Delete || key == XK_KP_Delete)
+      ControlCode = 127;
+
+    if (ControlCode >= 0)
+    {
+      // Make a copy of the normal key entry and hack the equivalent string
+      // part to be the UTF8 code for the control character.
+
+      if (KeyToUTF8Pntr != NULL)
+        KeyToUTF8SearchData = *KeyToUTF8Pntr;
+      else
+      {
+        memset (&KeyToUTF8SearchData, 0, sizeof (KeyToUTF8SearchData));
+        KeyToUTF8SearchData.vncKeyCode = key;
+      }
+
+      ControlCharacterAsUTF8 [0] = ControlCode;
+      ControlCharacterAsUTF8 [1] = 0;
+      KeyToUTF8SearchData.utf8String = ControlCharacterAsUTF8;
+      KeyToUTF8Pntr = &KeyToUTF8SearchData;
+
+      vlog.debug ("Modified it to ASCII control code %d, due to control key.",
+        ControlCode);
+    }
+  }
 
   if (KeyToUTF8Pntr == NULL)
   {
@@ -1191,10 +1226,18 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   {
     const char *pSource = KeyToUTF8Pntr->utf8String;
     char *pDest = KeyAsReadableUTF8String;
+
+    if (*pSource == 0)
+    {
+      // An empty string is really the NUL control character.
+      *pDest++ = '0';
+      *pDest++ = '0';
+    }
+
     while (*pSource != 0 &&
     pDest < KeyAsReadableUTF8String + sizeof (KeyAsReadableUTF8String) - 4)
     {
-      if (*pSource < 32 || *pSource == 127)
+      if ((unsigned int) (*pSource) < 32 || *pSource == 127)
       {
         sprintf (pDest, "%02d", (int) *pSource);
         pSource++;
@@ -1210,39 +1253,40 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
   // (reflecting the current modifier keys) to see which key code it is.
 
   strcpy (KeyAsString, KeyToUTF8Pntr->utf8String);
+  uint16 SuggestedKeyCode = KeyToUTF8Pntr->suggestedBeOSKeyCode;
   KeyCode = 0;
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_caps_shift_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->option_caps_shift_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_CAPS_LOCK))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_caps_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->option_caps_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_shift_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->option_shift_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_OPTION_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->option_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->option_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CAPS_LOCK) &&
   (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->caps_shift_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->caps_shift_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CAPS_LOCK))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->caps_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->caps_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0 && (m_LastKeyState.modifiers & B_SHIFT_KEY))
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->shift_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->shift_map, KeyAsString, SuggestedKeyCode);
+  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY))
+    KeyCode = FindKeyCodeFromMap (
+      m_KeyMapPntr->control_map, KeyAsString, SuggestedKeyCode);
   if (KeyCode == 0)
     KeyCode = FindKeyCodeFromMap (
-      m_KeyMapPntr->normal_map, KeyAsString, KeyPadUsed);
-  if (KeyCode == 0 && (m_LastKeyState.modifiers & B_CONTROL_KEY))
-    KeyCode = FindKeyCodeFromMap ( /* Control is last since weird. */
-      m_KeyMapPntr->control_map, KeyAsString, KeyPadUsed);
+      m_KeyMapPntr->normal_map, KeyAsString, SuggestedKeyCode);
 
   if (KeyCode != 0)
   {
@@ -1256,36 +1300,8 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
     SetKeyState (m_LastKeyState, KeyCode, down);
     SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
 
-    // Finally, revert back to the modifier keys the user had specified, if
-    // this was a release of the key.
-
-    if (m_LastKeyState.modifiers != m_UserModifierState && !down)
-    {
-      char TempString[400];
-      strcpy (TempString, "Restoring modifiers from (");
-      PrintModifierState (m_LastKeyState.modifiers, TempString);
-      strcat (TempString, ") to user's original modifiers of (");
-      PrintModifierState (m_UserModifierState, TempString);
-      strcat (TempString, ").");
-      vlog.debug ("%s", TempString);
-
-      NewKeyState = m_LastKeyState;
-      NewKeyState.modifiers = m_UserModifierState;
-      WriteModifiersToKeyState (NewKeyState);
-
-      EventMessage.what = B_MODIFIERS_CHANGED;
-      EventMessage.AddInt64 ("when", system_time ());
-      EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
-      EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
-      EventMessage.AddData ("states",
-        B_UINT8_TYPE, &NewKeyState.key_states, 16);
-      m_EventInjectorPntr->Control ('EInj', &EventMessage);
-      EventMessage.MakeEmpty ();
-
-      SendUnmappedKeys (m_LastKeyState, NewKeyState);
-      m_LastKeyState = NewKeyState;
-    }
-
+    if (!down)
+      RevertToUsersModifierKeys ();
     return; // Finished with ordinary key presses.
   }
 
@@ -1298,82 +1314,99 @@ void SDesktopBeOS::keyEvent (rdr::U32 key, bool down)
 
   uint32 NewModifier = 0;
   if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->normal_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->normal_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = 0;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->shift_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->shift_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->caps_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->caps_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_CAPS_LOCK;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->caps_shift_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->caps_shift_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_CAPS_LOCK | B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->option_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_LEFT_OPTION_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_shift_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->option_shift_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_LEFT_OPTION_KEY | B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_caps_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->option_caps_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_LEFT_OPTION_KEY | B_CAPS_LOCK;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->option_caps_shift_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->option_caps_shift_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_LEFT_OPTION_KEY | B_CAPS_LOCK | B_LEFT_SHIFT_KEY;
   else if (0 != (KeyCode = FindKeyCodeFromMap (
-  m_KeyMapPntr->control_map, KeyAsString, KeyPadUsed)))
+  m_KeyMapPntr->control_map, KeyAsString, SuggestedKeyCode)))
     NewModifier = B_LEFT_CONTROL_KEY;
 
-  if (KeyCode == 0)
+  if (KeyCode != 0)
   {
-    vlog.debug ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
-      "which BeOS keys need to be \"pressed\" to achieve that.  Ignoring it.",
-      key, down ? "down" : "up", KeyAsReadableUTF8String);
-    return;
+    NewModifier |= (m_LastKeyState.modifiers & (
+      B_SCROLL_LOCK | B_NUM_LOCK | B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY));
+    UpdateDerivedModifiers (NewModifier);
+
+    { // Debug message block.
+      char TempString[400];
+      sprintf (TempString, "VNC keycode $%04X (%s) maps to \"%s\", but we need "
+        "to change modifiers from (", key, down ? "down" : "up",
+        KeyAsReadableUTF8String);
+      PrintModifierState (m_LastKeyState.modifiers, TempString);
+      strcat (TempString, ") to (");
+      PrintModifierState (NewModifier, TempString);
+      strcat (TempString, ").");
+      vlog.debug ("%s", TempString);
+    }
+
+    NewKeyState = m_LastKeyState;
+    NewKeyState.modifiers = NewModifier;
+    WriteModifiersToKeyState (NewKeyState);
+
+    if (NewKeyState.modifiers != m_LastKeyState.modifiers)
+    {
+      EventMessage.what = B_MODIFIERS_CHANGED;
+      EventMessage.AddInt64 ("when", system_time ());
+      EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
+      EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
+      EventMessage.AddData ("states",
+        B_UINT8_TYPE, &NewKeyState.key_states, 16);
+      m_EventInjectorPntr->Control ('EInj', &EventMessage);
+      EventMessage.MakeEmpty ();
+    }
+    SendUnmappedKeys (m_LastKeyState, NewKeyState);
+    m_LastKeyState = NewKeyState;
+
+    // Now send the actual key, using the modified modifier keys.
+
+    vlog.debug ("%s temporarily shifted key code %d (%s).",
+      down ? "Pressed" : "Released", KeyCode, NameOfScanCode (KeyCode));
+
+    SetKeyState (m_LastKeyState, KeyCode, down);
+    SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
+
+    // Finally, revert back to the modifier keys the user had specified, if
+    // this was a release of the key.  If it was a press, leave them in effect
+    // until after the key release.
+
+    if (!down)
+      RevertToUsersModifierKeys ();
+
+    return; // Finished with modified modifiers key press.
   }
 
-  NewModifier |= (m_LastKeyState.modifiers & (
-    B_SCROLL_LOCK | B_NUM_LOCK | B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY));
-  UpdateDerivedModifiers (NewModifier);
+  // Just send it as an unmapped key, if it has a suggested key code.
 
-  { // Debug message block.
-    char TempString[400];
-    sprintf (TempString, "VNC keycode $%04X (%s) maps to \"%s\", but we need "
-      "to change modifiers from (", key, down ? "down" : "up",
-      KeyAsReadableUTF8String);
-    PrintModifierState (m_LastKeyState.modifiers, TempString);
-    strcat (TempString, ") to (");
-    PrintModifierState (NewModifier, TempString);
-    strcat (TempString, ").");
-    vlog.debug ("%s", TempString);
-  }
+  vlog.debug ("VNC keycode $%04X (%s) maps to \"%s\", but it isn't obvious "
+    "which BeOS keys need to be pressed to achieve that.  Sending it "
+    "as unmapped key %d (%s).",
+    key, down ? "down" : "up", KeyAsReadableUTF8String,
+    SuggestedKeyCode, NameOfScanCode (SuggestedKeyCode));
 
   NewKeyState = m_LastKeyState;
-  NewKeyState.modifiers = NewModifier;
-  WriteModifiersToKeyState (NewKeyState);
-
-  if (NewKeyState.modifiers != m_LastKeyState.modifiers)
-  {
-    EventMessage.what = B_MODIFIERS_CHANGED;
-    EventMessage.AddInt64 ("when", system_time ());
-    EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
-    EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
-    EventMessage.AddData ("states",
-      B_UINT8_TYPE, &NewKeyState.key_states, 16);
-    m_EventInjectorPntr->Control ('EInj', &EventMessage);
-    EventMessage.MakeEmpty ();
-  }
+  SetKeyState (NewKeyState, SuggestedKeyCode, down);
   SendUnmappedKeys (m_LastKeyState, NewKeyState);
   m_LastKeyState = NewKeyState;
-
-  // Now send the actual key, using the modified modifier keys.
-
-  vlog.debug ("%s temporarily shifted key code %d (%s).",
-    down ? "Pressed" : "Released", KeyCode, NameOfScanCode (KeyCode));
-
-  SetKeyState (m_LastKeyState, KeyCode, down);
-  SendMappedKeyMessage (KeyCode, down, KeyAsString, EventMessage);
 }
 
 
@@ -1629,6 +1662,38 @@ void SDesktopBeOS::pointerEvent (const rfb::Point& pos, rdr::U8 buttonmask)
   m_LastMouseButtonState = buttonmask;
   m_LastMouseX = AbsoluteX;
   m_LastMouseY = AbsoluteY;
+}
+
+
+void SDesktopBeOS::RevertToUsersModifierKeys ()
+{
+  if (m_LastKeyState.modifiers == m_UserModifierState)
+    return;
+
+  char TempString[400];
+  strcpy (TempString, "Restoring modifiers from (");
+  PrintModifierState (m_LastKeyState.modifiers, TempString);
+  strcat (TempString, ") to user's original modifiers of (");
+  PrintModifierState (m_UserModifierState, TempString);
+  strcat (TempString, ").");
+  vlog.debug ("%s", TempString);
+
+  key_info NewKeyState = m_LastKeyState;
+  NewKeyState.modifiers = m_UserModifierState;
+  WriteModifiersToKeyState (NewKeyState);
+
+  BMessage EventMessage;
+  EventMessage.what = B_MODIFIERS_CHANGED;
+  EventMessage.AddInt64 ("when", system_time ());
+  EventMessage.AddInt32 ("be:old_modifiers", m_LastKeyState.modifiers);
+  EventMessage.AddInt32 ("modifiers", NewKeyState.modifiers);
+  EventMessage.AddData ("states",
+    B_UINT8_TYPE, &NewKeyState.key_states, 16);
+  m_EventInjectorPntr->Control ('EInj', &EventMessage);
+  EventMessage.MakeEmpty ();
+
+  SendUnmappedKeys (m_LastKeyState, NewKeyState);
+  m_LastKeyState = NewKeyState;
 }
 
 
