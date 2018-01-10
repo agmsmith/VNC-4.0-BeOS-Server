@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.3 2005/01/02 21:57:29 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.4 2014/09/23 20:25:04 agmsmith Exp agmsmith $
  *
  * This is the add-in (shared .so library for BeOS) which injects keyboard and
  * mouse events into the BeOS InputServer, letting the remote system move the
@@ -32,10 +32,14 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: InputEventInjector.cpp,v $
+ * Revision 1.4  2014/09/23 20:25:04  agmsmith
+ * Just bumping the version number to mark the addition of a resource with the
+ * version number info, so users can see which version they have.
+ *
  * Revision 1.3  2005/01/02 21:57:29  agmsmith
- * Made the event injector simpler - only need one device, not
- * separate ones for keyboard and mouse.  Also renamed it to
- * InputEventInjector to be in line with it's more general use.
+ * Made the event injector simpler - only need one device, not separate ones
+ * for keyboard and mouse.  Also renamed it to InputEventInjector to be in line
+ * with it's more general use.
  *
  * Revision 1.2  2004/09/13 00:01:26  agmsmith
  * Added installation instructions and a version string.
@@ -61,7 +65,7 @@
 extern "C" _EXPORT BInputServerDevice* instantiate_input_device (void);
 
 const char InputEventInjectorVersionString [] =
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.3 2005/01/02 21:57:29 agmsmith Exp agmsmith $";
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.4 2014/09/23 20:25:04 agmsmith Exp agmsmith $";
 
 static struct input_device_ref FakeKeyboardLink =
 {
