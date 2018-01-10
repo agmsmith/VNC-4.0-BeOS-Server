@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.26 2014/10/05 20:14:21 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.27 2015/09/12 00:32:08 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,26 +22,33 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.27  2015/09/12 00:32:08  agmsmith
+ * Now with working keypad and better handling of odd keyboard combinations.
+ * Also the dumb screen grab (BScreen) method now does updates once in a while
+ * so that you can scrub with the mouse and see new screen contents, not the
+ * stuff from the last full screen refresh.
+ *
  * Revision 1.26  2014/10/05 20:14:21  agmsmith
- * Bump version number, changes all in documentation about Haiku and using .hpkg
+ * Bump version number, changes all in documentation about Haiku and using
+ * .hpkg
  *
  * Revision 1.25  2014/07/28 20:26:06  agmsmith
- * Change main thread priority to 5 (low) rather than the default of
- * 10 (normal).  Also add a command line option to specify it.
+ * Change main thread priority to 5 (low) rather than the default of 10
+ * (normal).  Also add a command line option to specify it.
  *
  * Revision 1.24  2013/04/23 20:49:02  agmsmith
  * Adjusted types and headers to make it buildable in GCC4 under Haiku OS.
  *
  * Revision 1.23  2013/02/11 22:31:17  agmsmith
- * Detect network failures and restart networking, which included
- * figuring out how to shut it all down first.  Now survives NetServer
- * reboots.
+ * Detect network failures and restart networking, which included figuring out
+ * how to shut it all down first.  Now survives NetServer reboots.
  *
  * Revision 1.22  2011/11/11 21:59:57  agmsmith
  * Bumped version number for new bigger cheap cursor, for iPad viewability.
  *
  * Revision 1.21  2007/01/23 02:41:59  agmsmith
- * No changes - just a recompile with the newer gcc that does better optimization.
+ * No changes - just a recompile with the newer gcc that does better
+ * optimization.
  *
  * Revision 1.20  2005/05/30 00:41:35  agmsmith
  * Punctuation.
@@ -53,37 +60,36 @@
  * Removed unused parameters - HTTP servers and host wildcards.
  *
  * Revision 1.17  2005/02/13 01:28:44  agmsmith
- * Now notices clipboard changes and informs all the clients
- * about the new text contents.
+ * Now notices clipboard changes and informs all the clients about the new text
+ * contents.
  *
  * Revision 1.16  2005/02/06 23:39:14  agmsmith
  * Bumpped version number.
  *
  * Revision 1.15  2005/01/03 00:19:50  agmsmith
- * Based on more recent source than 4.0 Beta 4, update
- * comments to show that it's the final 4.0 VNC source.
+ * Based on more recent source than 4.0 Beta 4, update comments to show that
+ * it's the final 4.0 VNC source.
  *
  * Revision 1.14  2005/01/02 21:09:46  agmsmith
  * Bump the version number.
  *
  * Revision 1.13  2004/12/12 21:44:39  agmsmith
- * Remove dead event loop timer, it does get stuck for long times
- * when the network connection is down.
+ * Remove dead event loop timer, it does get stuck for long times when the
+ * network connection is down.
  *
  * Revision 1.12  2004/12/05 23:40:04  agmsmith
- * Change timing system to use the event loop rather than a
- * separate thread.  Didn't fix the memory crash bug when
- * switching screen resolution - so it's not stack size or
- * multithreading.
+ * Change timing system to use the event loop rather than a separate thread.
+ * Didn't fix the memory crash bug when switching screen resolution - so it's
+ * not stack size or multithreading.
  *
  * Revision 1.11  2004/11/27 22:53:12  agmsmith
- * Oops, forgot about the network time delay for new data.  Make it shorter
- * so that the overall update loop is faster.
+ * Oops, forgot about the network time delay for new data.  Make it shorter so
+ * that the overall update loop is faster.
  *
  * Revision 1.10  2004/11/22 02:40:40  agmsmith
- * Changed from Pulse() timing to using a separate thread, so now
- * mouse clicks and other time sensitive responses are much more
- * accurate (1/60 second accuracy at best).
+ * Changed from Pulse() timing to using a separate thread, so now mouse clicks
+ * and other time sensitive responses are much more accurate (1/60 second
+ * accuracy at best).
  *
  * Revision 1.9  2004/09/13 01:41:53  agmsmith
  * Update rate time limits now in the desktop module.
@@ -164,7 +170,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.26 2014/10/05 20:14:21 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.27 2015/09/12 00:32:08 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
