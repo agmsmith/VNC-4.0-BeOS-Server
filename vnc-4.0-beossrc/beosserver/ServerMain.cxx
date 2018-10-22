@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.28 2018/01/10 22:25:05 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.29 2018/10/22 20:47:51 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,11 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.29  2018/10/22 20:47:51  agmsmith
+ * Call select() with the actual number of FileDescriptors being waited for,
+ * rather than the theoretical maximum.  Hoping to avoid a Haiku R1B1
+ * mysterious select invalid arguments error.
+ *
  * Revision 1.28  2018/01/10 22:25:05  agmsmith
  * Bumped version number for New Haiku (2018) build.
  *
@@ -173,7 +178,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.28 2018/01/10 22:25:05 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.29 2018/10/22 20:47:51 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -561,8 +566,9 @@ int main (int argc, char** argv)
   try {
     rfb::initStdIOLoggers();
     rfb::LogWriter::setLogParams("*:stdout:30");
-      // Normal level is 30, use 1000 for debug messages.  Or on the command
-      // line to see everything try: --log=*:stdout:1000
+      // Normal level is 30 (info level), use more for debug messages, <100 to
+      // avoid messages about keys pressed.  Or on the command line to see
+      // everything try: --log=*:stdout:1000
 
     // Override the default parameters with new values from the command line.
     // Display the usage message and exit the program if an unknown parameter
@@ -584,6 +590,9 @@ int main (int argc, char** argv)
         continue;
       usage(argv[0]);
     }
+
+    vlog.info ("Starting vncserver, $Revision: $, was compiled on "
+      __DATE__ " at " __TIME__ ".", argv[0]);
 
     // Set the priority of the main polling thread.  If it's normal, than some
     // computers don't have enough CPU time for other things and you get clicks
