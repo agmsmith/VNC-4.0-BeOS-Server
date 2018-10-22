@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.27 2015/09/12 00:32:08 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.28 2018/01/10 22:25:05 agmsmith Exp agmsmith $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.28  2018/01/10 22:25:05  agmsmith
+ * Bumped version number for New Haiku (2018) build.
+ *
  * Revision 1.27  2015/09/12 00:32:08  agmsmith
  * Now with working keypad and better handling of odd keyboard combinations.
  * Also the dumb screen grab (BScreen) method now does updates once in a while
@@ -170,7 +173,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.27 2015/09/12 00:32:08 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.28 2018/01/10 22:25:05 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -198,7 +201,7 @@ static rfb::VncAuthPasswdFileParameter vncAuthPasswd;
   // SSecurityFactoryStandard class system, specifying that we
   // store passwords in a file.
 
- 
+
 
 /******************************************************************************
  * ServerApp is the top level class for this program.  This handles messages
@@ -367,6 +370,8 @@ void ServerApp::PollNetwork ()
 
   try
   {
+    int            cur_fd;
+    int            highest_fd;
     fd_set         rfds;
     struct timeval tv;
 
@@ -374,15 +379,28 @@ void ServerApp::PollNetwork ()
     tv.tv_usec = 5000; // Time delay in millionths of a second, keep short.
 
     FD_ZERO(&rfds);
-    FD_SET(m_TcpListenerPntr->getFd(), &rfds);
+    highest_fd = 0;
+
+    cur_fd = m_TcpListenerPntr->getFd();
+    FD_SET(cur_fd, &rfds);
+    if (cur_fd > highest_fd)
+      highest_fd = cur_fd;
 
     std::list<network::Socket*> sockets;
     m_VNCServerPntr->getSockets(&sockets);
     std::list<network::Socket*>::iterator iter;
     for (iter = sockets.begin(); iter != sockets.end(); iter++)
-      FD_SET((*iter)->getFd(), &rfds);
+    {
+      cur_fd = (*iter)->getFd();
+      FD_SET(cur_fd, &rfds);
+      if (cur_fd > highest_fd)
+        highest_fd = cur_fd;
+    }
 
-    int n = select(FD_SETSIZE, &rfds, 0, 0, &tv);
+    if (highest_fd >= FD_SETSIZE) // Probably trashed stack if this happened.
+      throw rdr::SystemException("FD_SETSIZE Exceeded", -1);
+
+    int n = select(highest_fd + 1, &rfds, 0, 0, &tv);
     if (n < 0) throw rdr::SystemException("select", errno);
 
     for (iter = sockets.begin(); iter != sockets.end(); iter++) {
