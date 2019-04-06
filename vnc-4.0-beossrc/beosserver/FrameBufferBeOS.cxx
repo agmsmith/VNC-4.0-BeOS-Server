@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.21 2013/02/19 03:16:30 agmsmith Exp agmsmith $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.22 2013/02/19 20:47:56 agmsmith Exp agmsmith $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,10 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.22  2013/02/19 20:47:56  agmsmith
+ * Add a full range gray scale palette so that the technical problems
+ * picture has a smoother gradient.
+ *
  * Revision 1.21  2013/02/19 03:16:30  agmsmith
  * Ignore B_DIRECT_MODIFY messages about clipping and other stuff
  * we don't care about.
@@ -130,6 +134,13 @@
 
 static rfb::LogWriter vlog("FrameBufferBeOS");
 
+static rfb::BoolParameter HideUpdateCounter("HideUpCounter",
+  "Hides the little number in the top left corner of the screen which shows "
+  "the number of updates completed so far.  Was more useful in dial-up days "
+  "when it took a while for updates to complete; with modern networks it "
+  "just increments in a blur.  But it does give you a visible sign when "
+  "someone has connected to your computer",
+  false);
 
 
 /******************************************************************************
@@ -295,7 +306,14 @@ BDirectWindowReader::BDirectWindowReader (color_map *ColourMapPntr)
 
   m_ScreenSize = ScreenInfo.Frame ();
   MoveTo (m_ScreenSize.left, m_ScreenSize.top);
-  ResizeTo (80, 20); // A small window so it doesn't obscure the desktop.
+  ResizeTo (100, 22); // A small window so it doesn't obscure the desktop.
+  if (HideUpdateCounter)
+  {
+    // Move window off screen, but barely touching (doesn't work properly for
+    // BDirectWindow - no frame buffer - if right edge is at minus 1 instead of
+    // zero).  It's still there to get clipboard events too.
+    MoveTo (m_ScreenSize.left - Frame().Width(), m_ScreenSize.top);
+  }
 
   memcpy (m_ColourMapPntr, ScreenInfo.ColorMap (), sizeof (*m_ColourMapPntr));
 
@@ -327,7 +345,7 @@ void BDirectWindowReader::DirectConnected (
   (ConnectionInfoPntr->buffer_state & B_BUFFER_MOVED) == 0 &&
   (ConnectionInfoPntr->buffer_state & B_BUFFER_RESET) == 0)
     return; // One of those uninteresting messages, HaikuOS spews a lot of them.
-  
+
   // For debugging purposes, measure the elapsed time to see if we're getting
   // close to the 3 seconds maximum allowed by BeOS or 0.5 seconds for Haiku.
   // Could happen if we have to wait for a full screen to be transmitted.
@@ -437,7 +455,7 @@ FrameBufferBeOS::FrameBufferBeOS () :
   m_CachedStride (0),
   m_StatusWindowPntr (NULL)
 {
-  strcpy (m_StatusString, "VNC-BeOS");
+  strcpy (m_StatusString, "VNC-BeOS/Haiku");
 
   m_GrayMap.m_BeOSColourMap.id = B_GRAY8;
   for (int i = 0; i < 256; i++)
@@ -788,8 +806,18 @@ FrameBufferBScreen::FrameBufferBScreen ()
     B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AVOID_FOCUS,
     B_ALL_WORKSPACES);
   m_StatusWindowPntr->MoveTo (m_BScreenPntr->Frame().LeftTop());
-  m_StatusWindowPntr->ResizeTo (80, 20);
+  m_StatusWindowPntr->ResizeTo (100, 22);
   m_StatusWindowPntr->Show (); // Opens the window and starts its thread.
+
+  if (HideUpdateCounter)
+  {
+    // Move window almost off screen, just barely touching.  It's still there
+    // to get clipboard events etc.
+    m_StatusWindowPntr->MoveTo (
+      m_BScreenPntr->Frame().left - m_StatusWindowPntr->Frame().Width(),
+      m_BScreenPntr->Frame().top);
+  }
+
   InitialiseStatusView ();
 
   // And the pixel format and frame buffer initial contents.

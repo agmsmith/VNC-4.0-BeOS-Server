@@ -1,6 +1,6 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.29 2018/10/22 20:47:51 agmsmith Exp agmsmith $
- *
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.30 2018/10/22 21:33:07 agmsmith Exp agmsmith $
+ * 
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
  * http://www.realvnc.com/), with BeOS adaptations by Alexander G. M. Smith.
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.30  2018/10/22 21:33:07  agmsmith
+ * Print out version number and compile date when starting.
+ *
  * Revision 1.29  2018/10/22 20:47:51  agmsmith
  * Call select() with the actual number of FileDescriptors being waited for,
  * rather than the theoretical maximum.  Hoping to avoid a Haiku R1B1
@@ -178,7 +181,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.29 2018/10/22 20:47:51 agmsmith Exp agmsmith $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.30 2018/10/22 21:33:07 agmsmith Exp agmsmith $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -591,7 +594,7 @@ int main (int argc, char** argv)
       usage(argv[0]);
     }
 
-    vlog.info ("Starting vncserver, $Revision: $, was compiled on "
+    vlog.info ("Starting vncserver, $Revision: 1.30 $, was compiled on "
       __DATE__ " at " __TIME__ ".", argv[0]);
 
     // Set the priority of the main polling thread.  If it's normal, than some
