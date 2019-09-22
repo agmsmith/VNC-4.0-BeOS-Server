@@ -32,6 +32,11 @@
 #include <unistd.h>
 #include <sys/time.h>
 #endif
+#ifdef __BEOS__ // Put this after other includes so "write" redefinition works.
+#include <sys/socket.h> // For fd_set.
+#define write(s,b,l) send(s,(char*)b,l,0) // BeOS R5 socket handles are not file handles.
+#endif
+
 
 #include <rdr/FdOutStream.h>
 #include <rdr/Exception.h>

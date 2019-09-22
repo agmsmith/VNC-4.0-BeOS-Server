@@ -35,6 +35,11 @@
 #include <unistd.h>
 #include <sys/time.h>
 #endif
+#ifdef __BEOS__ // Put this after other includes so "read" redefinition works.
+#include <sys/socket.h> // For fd_set.
+#define read(s,b,l) recv(s,(char*)b,l,0) // BeOS R5 socket handles are not file handles.
+#define close closesocket // BeOS R5 sockets are not handles again.
+#endif
 
 // XXX should use autoconf HAVE_SYS_SELECT_H
 #ifdef _AIX

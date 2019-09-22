@@ -21,6 +21,18 @@
 #include <winsock2.h>
 #define errorNumber WSAGetLastError()
 #define snprintf _snprintf
+#elif defined (__BEOS__)
+#define errorNumber errno
+#undef closesocket // closesocket is closesocket in BeOS.
+#ifndef TCP_NODELAY
+#define TCP_NODELAY 1
+#endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
 #else
 #define errorNumber errno
 #define closesocket close
@@ -37,12 +49,17 @@
 #include <fcntl.h>
 #endif
 
+#include <stdlib.h>
 #include <network/TcpSocket.h>
 #include <rfb/util.h>
 #include <rfb/LogWriter.h>
 
 #ifndef VNC_SOCKLEN_T
-#define VNC_SOCKLEN_T int
+  #ifdef __HAIKU__
+    #define VNC_SOCKLEN_T socklen_t
+  #else
+    #define VNC_SOCKLEN_T int
+  #endif
 #endif
 
 #ifndef INADDR_NONE
@@ -63,6 +80,7 @@ TcpSocket::initTcpSockets() {
   
   if (WSAStartup(requiredVersion, &initResult) != 0)
     throw SocketException("unable to initialise Winsock2", errorNumber);
+#elif defined(__BEOS__)
 #else
   signal(SIGPIPE, SIG_IGN);
 #endif
@@ -84,7 +102,7 @@ TcpSocket::TcpSocket(const char *host, int port)
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     throw SocketException("unable to create socket", errorNumber);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__BEOS__)
   // - By default, close the socket on exec()
   fcntl(sock, F_SETFD, FD_CLOEXEC);
 #endif
@@ -121,8 +139,13 @@ TcpSocket::TcpSocket(const char *host, int port)
   if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
 		 (char *)&one, sizeof(one)) < 0) {
     int e = errorNumber;
+#ifdef __BEOS__ // Allow this as a non-fatal error in BeOS.
+    vlog.error("in TcpListener::TcpSocket unable to setsockopt TCP_NODELAY, "
+      "error code %d, continuing on anyway.", e);
+#else
     closesocket(sock);
     throw SocketException("unable to setsockopt TCP_NODELAY", e);
+#endif
   }
 
   // Create the input and output streams
@@ -250,7 +273,7 @@ TcpListener::TcpListener(int port, bool localhostOnly, int sock, bool close_)
   if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     throw SocketException("unable to create listening socket", errorNumber);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__BEOS__)
   // - By default, close the socket on exec()
   fcntl(sock, F_SETFD, FD_CLOEXEC);
 
@@ -308,7 +331,7 @@ TcpListener::accept() {
   if ((new_sock = ::accept(fd, 0, 0)) < 0)
     throw SocketException("unable to accept new connection", errorNumber);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__BEOS__)
   // - By default, close the socket on exec()
   fcntl(new_sock, F_SETFD, FD_CLOEXEC);
 #endif
@@ -318,8 +341,13 @@ TcpListener::accept() {
   if (setsockopt(new_sock, IPPROTO_TCP, TCP_NODELAY,
    (char *)&one, sizeof(one)) < 0) {
     int e = errorNumber;
+#ifdef __BEOS__ // Nonfatal in BeOS, which can't do TCP_NODELAY in some versions.
+    vlog.error ("in TcpListener::accept unable to setsockopt TCP_NODELAY, "
+      "error code %d, continuing on anyway.", e);
+#else
     closesocket(new_sock);
     throw SocketException("unable to setsockopt TCP_NODELAY", e);
+#endif
   }
 
   // Create the socket object & check connection is allowed

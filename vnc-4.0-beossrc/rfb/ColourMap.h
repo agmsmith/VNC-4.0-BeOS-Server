@@ -28,6 +28,7 @@ namespace rfb {
 
   class ColourMap {
   public:
+    virtual ~ColourMap() {};
     virtual void lookup(int index, int* r, int* g, int* b)=0;
   };
 }

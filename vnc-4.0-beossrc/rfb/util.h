@@ -74,17 +74,18 @@ namespace rfb {
 // __RFB_UTIL_H__, so that you can always guarantee they will be defined if
 // this file is the last #include before you use them.
 
-#ifndef max
-#define max(a,b)            (((a) > (b)) ? (a) : (b))
+// Renamed *_vnc to avoid trampling on plain min/max, used by the
+// STL Vector template.  AGMS20130423
+
+#ifndef max_vnc
+#define max_vnc(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
-#ifndef min
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
+#ifndef min_vnc
+#define min_vnc(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
-
 
 // -=- PLATFORM SPECIFIC UTILITY FUNCTIONS/IMPLEMENTATIONS
 #ifdef WIN32
 #include "win32/util_win32.h"
 #endif
-

@@ -46,6 +46,7 @@ char HexOutStream::intToHex(int i) {
     return 'a'+(i-10);
   else
     throw rdr::Exception("intToHex failed");
+  return '0';
 }
 
 char* HexOutStream::binToHexStr(const char* data, int length) {

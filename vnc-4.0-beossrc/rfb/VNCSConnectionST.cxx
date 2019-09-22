@@ -247,6 +247,7 @@ int VNCSConnectionST::checkIdleTimeout()
   }
   if (timeLeft <= 0) {
     close("Idle timeout");
+    lastEventTime = now; // So we don't get a tight loop of close timeouts.  AGMS20130220
     return 0;
   }
   return timeLeft * 1000;

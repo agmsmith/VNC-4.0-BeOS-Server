@@ -87,7 +87,7 @@ VNCServerST::VNCServerST(const char* name_, SDesktop* desktop_,
 
 VNCServerST::~VNCServerST()
 {
-  slog.debug("shutting down server %s", name.buf);
+  slog.info("shutting down server %s", name.buf);
 
   // Close any active clients, with appropriate logging & cleanup
   closeClients("Server shutdown");
