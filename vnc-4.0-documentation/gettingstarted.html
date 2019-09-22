@@ -1,0 +1,288 @@
+<!-- gettingstarted.html; converted from gettingstarted.htpp by wwwpp.pl -->
+<!--               at 17:41:54 on 16/06/2004 -->
+<!-- Don't edit this file - edit the htpp version! -->
+    <!doctype html public "-//W3C//DTD HTML 3.2 Final//EN">
+    <html>
+
+    <head>
+<meta name="keywords" content="VNC, real, RealVNC, AT&T Laboratories Cambridge, Virtual Network Computing, WinVNC, remote control, thin-client, software">
+<meta name="description" content="RealVNC is the official home of VNC, staffed by the original team who created and developed it whilst at AT&T. VNC uses an open platform-independent protocol to allow desktop remote control.">
+<title>RealVNC - Getting Started with VNC</title>
+<link rel="stylesheet" href="realvnc.css" type="text/css"><link rel="shortcut icon" href="favicon.ico" type="text/css">
+    </head>
+
+    <body class=bodybackground>
+
+<table width="100%" cellpadding="0" cellspacing="5" border="0" align="center">
+    <tr>
+                <td valign="top">
+		<img src="images/logo150x150.gif" align="left" alt="RealVNC Logo" border="0">
+		</td>
+		<td width="2.5%"></td>
+		<td width="100%" align="center" valign="center">
+		<div class=titleheading>
+		Getting Started with VNC
+		</div>
+		</td>
+    </tr>
+</table>
+ 
+<table width="100%" cellpadding="0" cellspacing="5" border="0">
+<tr>
+
+<td width="100%" valign="top" class="bodytext"><!-- START of body column -->
+
+
+
+<h3>Index</h3>
+<a href="#1">Overview</a><br>
+<a href="#2">Networking</a><br>
+<a href="#3">Running a Windows server</a><br> 
+<a href="#4">Running a Unix server</a><br> 
+<a href="#5">Running a viewer</a><br>
+<a href="#6">Using a web browser as a viewer</a><br>
+<a href="#7">Troubleshooting</a><br> 
+
+<a href="1"></a><h3>Overview</h3>
+VNC consists of two components. A <i>server</i>, which runs on the computer you want to remotely access, and a <i>viewer</i>, which runs on the computer you are sitting in front of. There are two important features of VNC: 
+<ul>
+<li> The server and the viewer&nbsp; may be on different machines and
+on types of computer. The protocol which connects the server
+and viewer is simple, open, and platform independent.
+
+<p>
+
+<li>
+No state is stored at the viewer. Breaking the viewer's connection to the
+server and then reconnecting will not result in any loss of data.
+Because the connection can be remade from somewhere else, you have easy
+mobility.
+
+</ul>
+
+So to get started with VNC you need to run a server, and then connect
+to it with a viewer.  First of all, you have to <A
+href="http://www.realvnc.com/download.html">download and install</a> the software on the
+platforms you want to use.
+
+<a name="2"></a><h3>Networking</h3>
+
+VNC software requires a TCP/IP connection between the server and the
+viewer. This is the standard networking protocol on LANs, WANs,
+broadband and dialup ISP. Each computer has a unique IP address and
+may also have a name in the DNS.  You will need to know the IP address
+or name of the server when you connect a viewer to it.
+
+<p>
+
+Sometimes the IP address is fixed, and sometimes it is issued to you
+dynamically by your ISP. If it is allocated dynamically, you might
+consider using a third party DNS management service. Try typing
+"dynamic dns management service" into a google.
+
+<br>
+<hr WIDTH="100%">
+<TABLE WIDTH=100% BORDER=0 CELLSPACING=16 CELLPADDING=8 class="bodytext">
+<TR>
+<TD VALIGN=TOP BGCOLOR=#E0E0FF WIDTH=50%>
+
+<a name="3"></a><h3>Running a Windows server</h3> 
+Installing the Windows server, WinVNC, should create a
+RealVNC group in your Start... menu. Run the VNC
+server. 
+
+<p>
+
+<center><img SRC="v4/images/winvnc4_startmenu.gif" align=center></center>
+
+<p>
+
+If this is the first time you've used a VNC server on this machine
+you'll be prompted to set a password, which you'll need when you
+connect to the machine from a remote location.  A small icon will
+appear in the system tray, and by right-clicking on this you can
+control most aspects of the server.
+
+<p>
+
+<center><img SRC="v4/images/winvnc4_traymenu.gif" align=center></center>
+
+<p>
+
+The IP address of the computer running the VNC server can be found
+by hovering over the tray icon in the system tray. Unless this
+computer has a DNS name, you will need to specify this number to the
+viewer when you connect.
+
+<p>
+
+<center><img SRC="v4/images/winvnc4_ipaddr.gif" align=middle></center>
+
+<p>
+
+
+Full instructions for installing and running the <a
+href="v4/winvnc.html">Windows VNC server</a> can be found under the <a
+href="documentation.html">main documentation</a>.)</p>
+
+
+<p>You can now go to another machine and connect a viewer to the
+server.</p> 
+</TD>
+</TR><TR>
+<TD BGCOLOR=#FFE0FF WIDTH="50%" valign=top> 
+<a name="4"></a><h3>Running a Unix server</h3> 
+
+To X applications, a VNC server appears just like the standard X display
+you sit in front of, but without a physical screen attached.  The
+applications don't know this, they just carry on running whether or
+not a viewer is connected.  You can start a new VNC server on a Unix
+machine by typing:
+
+<blockquote><tt><a href="v4/man/vncserver.html">vncserver</a></tt></blockquote>
+
+<p>
+
+If you haven't run a VNC server before you will be prompted for a
+password, which you will need to use when connecting to this
+server. All <i>your</i> servers on the same Unix machine will use the
+same password, and you can change it at a later date using
+
+<blockquote><tt><a href="v4/man/vncpasswd.html">vncpasswd</a></tt></blockquote>
+
+With a normal X system, the main X display of a workstation called
+'snoopy<i>'</i> is usually <b>snoopy:0.</b> You can also run as many
+VNC servers on a Unix machine as you like, and they will appear as
+<b>snoopy:1</b>, <b>snoopy:2</b> etc, as if they were just additional
+displays.  Normally <tt>vncserver</tt> will choose the first available
+display number and tell you what it is, but you can specify a display
+number if you always wish to use the same one:
+<blockquote><tt>vncserver :2</tt></blockquote>
+
+
+You can cause applications to use a VNC server rather than the normal
+X display them by setting the DISPLAY environment variable to the VNC
+server you want, or by starting the application with the
+<tt>-display</tt> option.  For example: <blockquote><tt>xterm -display
+snoopy:2 &amp;</tt></blockquote> 
+
+<p>
+
+You can kill a Unix VNC server using, for example:
+<blockquote><tt>vncserver -kill :2</tt></blockquote>
+
+<p>
+
+Full instructions for installing and running VNC server for Unix can
+be found in the <a href="documentation.html">documentation</a>.
+
+<p>
+
+Nothing will appear immediately as a result of starting a Unix VNC
+server. To see anything you need to connect a viewer to the server,
+see below.
+
+</TD>
+</TR>
+</TABLE>
+<HR>
+<a name="5"></a><h3>Running a viewer</h3>
+
+
+You can run the Windows viewer the RealVNC group on the Start... menu. 
+
+<p>
+
+<center><img SRC="v4/images/winvncviewer4_startmenu.gif" align=center></center>
+
+<p>
+
+In this case, you will be prompted for the host name (VNC server name)
+and display number:
+
+<p>
+
+<center><img SRC="v4/images/winvncviewer4_display.gif" align=CENTER></center>
+
+<p>
+
+Enter it and click OK, and you will be prompted for your password, after
+which you should see the remote display. If you are connecting to
+a Windows or Mac server, the display number will be 0 unless you have
+explicitly changed it, and can be omitted.
+
+
+<p>
+
+You can run the viewer on Unix and Windows by typing at the command
+line: 
+
+<blockquote><tt>vncviewer snoopy:2</tt></blockquote>
+
+You need to specify the name of the VNC server and the number of the
+desktop. If, for example, you have started a server as display 2 on a
+machine called 'snoopy'. Remember that if you are connecting to a
+Windows or Mac server, the display number will be 0 unless you have
+explicitly changed it, and can be omitted.
+
+
+<p>
+If the machine running the server does not have a DNS entry, you
+probably won't be able to use the name and will have to replace
+<tt>snoopy</tt> with its IP address, for example something that
+looks like <tt>123.456.78.9</tt>.
+
+<HR>
+
+<a name="6"></a><h3>Using a web browser as a viewer</h3>
+
+The VNC servers also contain a small web server.  If you connect to
+this with a web browser, you can download the Java version of the
+viewer, and use this to view the server. You can then see your desktop
+from any Java-capable browser, unless you are using a proxy to connect
+to the web. The server listens for HTTP connections on port
+5800+display number. So to view display 2 on machine 'snoopy', you
+would point your web browser at:
+<blockquote><tt>http://snoopy:5802/</tt></blockquote> The applet will
+prompt you for your password, and should then display the desktop.
+<p>
+
+<a name="7"></a><h3>Troubleshooting</h3> 
+
+
+For more details see the <a href="documentation.html">the
+documentation</a>.  The answers to some common questions can be found
+in the <a href="faq.html">FAQ</a>. There are also some pages to help with <a href="troubleshooting.html">troubleshooting</a>.
+
+<p>
+
+If that doesn't help, try <a
+href="http://www.realvnc.com/swish-e/search2/vnc-list">searching</a> the archives. There tens
+of thousands of items collected over several years.
+
+<p>
+
+If you're still having trouble, you could <a
+href="http://www.realvnc.com/lists.html">subscribe</a> to the mailing list and ask your
+question there.
+
+
+</td><!-- END of body column -->
+
+</tr>
+</table>
+    &nbsp;<br>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+	<td class="headingline"><img src="images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+    </tr>
+    </table>
+    <table class="copyright" width="100%">
+    <tr>
+    <td valign=top>Copyright &copy; 2002-2004 <a href="http://www.realvnc.com/contact.html">RealVNC</a> Ltd</td>
+    <td valign=top align=right>RealVNC and the RealVNC logos are trademarks of RealVNC Ltd</td></tr>
+    </table>
+</body>
+</html>
+
+

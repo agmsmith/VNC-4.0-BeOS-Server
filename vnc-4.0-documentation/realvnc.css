@@ -1,0 +1,104 @@
+.menuoutline {
+	background-color: #807000;
+}
+ 
+.menubackground {
+	background-color: #eeffee;
+	background-color: #ddffdd;
+	font-size: 14px;
+}
+
+.menuheading {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 12px;
+	color: #ff6020;
+	color: #ff4010;
+}
+
+.menulink {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 12px;
+	text-decoration: none;
+	color: #104e8b;
+}
+ 
+.menulink:hover {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 12px;
+	text-decoration: underline;
+	color: #b06020;
+	color: #ff4010;
+}
+
+.contentsoutline {
+	background-color: #807000;
+	width: 95%;
+}
+
+.bodybackground {
+	background-color: #dfdf8f;
+	background-color: #ddddff;
+	background-color: #eeeeff;
+	background-color: #ffffff;
+	width: 100%;
+}
+
+.pagemoved {
+	background-color: #00000f;
+	width: 100%;
+}
+
+.copyright {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 12px;
+	text-decoration: none;
+}
+
+.link {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 14px;
+	text-decoration: none;
+	color: #804e1b;
+}
+
+.link:hover {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 14px;
+	text-decoration: underline;
+	color: #b06020;
+}
+
+.heading {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 14px;
+	color: #104e8b;
+}
+
+.headingline {
+	background-color: #607080;
+}
+
+.titleheading {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 24px;
+	color: #104e8b;
+}
+
+.bodytext {
+	font-family: Trebuchet MS, Arial, Helvetica, Geneva, Swiss, SunSans-Regular,
+		sans-serif;
+	font-size: 14px;
+	color: #000000;
+}
+
+
+
+

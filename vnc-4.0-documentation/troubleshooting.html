@@ -1,0 +1,104 @@
+<!-- troubleshooting.html; converted from troubleshooting.htpp by wwwpp.pl -->
+<!--               at 17:41:55 on 16/06/2004 -->
+<!-- Don't edit this file - edit the htpp version! -->
+    <!doctype html public "-//W3C//DTD HTML 3.2 Final//EN">
+    <html>
+
+    <head>
+<meta name="keywords" content="VNC, real, RealVNC, AT&T Laboratories Cambridge, Virtual Network Computing, WinVNC, remote control, thin-client, software">
+<meta name="description" content="RealVNC is the official home of VNC, staffed by the original team who created and developed it whilst at AT&T. VNC uses an open platform-independent protocol to allow desktop remote control.">
+<title>RealVNC - Troubleshooting</title>
+<link rel="stylesheet" href="realvnc.css" type="text/css"><link rel="shortcut icon" href="favicon.ico" type="text/css">
+    </head>
+
+    <body class=bodybackground>
+
+<table width="100%" cellpadding="0" cellspacing="5" border="0" align="center">
+    <tr>
+                <td valign="top">
+		<img src="images/logo150x150.gif" align="left" alt="RealVNC Logo" border="0">
+		</td>
+		<td width="2.5%"></td>
+		<td width="100%" align="center" valign="center">
+		<div class=titleheading>
+		Troubleshooting
+		</div>
+		</td>
+    </tr>
+</table>
+ 
+<table width="100%" cellpadding="0" cellspacing="5" border="0">
+<tr>
+
+<td width="100%" valign="top" class="bodytext"><!-- START of body column -->
+
+
+
+<b>VNC doesn't seem to work properly with Windows XP</b>
+
+<p>
+
+VNC will work with XP provided that Fast User Switching and Remote
+Administration are not used. Windows XP uses the Terminal Services
+system to implement Fast User Switching and Remote Administration.
+This is not compatible with the current release of VNC, but will be
+supported better in a future release.
+
+<p>
+
+<b>VNC causes my Windows NT/2000/XP machine to blue screen</b>
+
+<p>
+
+Windows NT Version 4 has bugs in the API which is used by VNC. You
+must have service pack 3 or higher installed to avoid problems.
+
+<p> 
+
+On Windows 2000/XP there are reports that blue screens occur as a
+result of having Microsoft Hotfix ??? installed, with or without VNC
+installed.
+
+<p>
+
+VNC does not install any system level hooks or driver
+software. Consequently it cannot cause machines to crash except by by
+exposing bugs in the undelying operating system and device drivers. If
+it appears that VNC causes your machine to crash, check that you have
+the latest service packs, graphics drivers and network drivers
+installed for your system.
+
+<p>
+
+<b>My computer uses roaming profiles, and with VNC installed the
+profiles are sometimes not saved back to the server. It can take a
+very long time to log out.</b>
+
+<p>
+
+Versions of VNC prior to 3.3.6 have a bug that can cause this
+behaviour. Additionally we have had reports Windows 2000 machines with
+Hotfix Q329170 installed exhibit the same behaviour, with or without
+VNC installed.
+
+<p>
+
+
+</td><!-- END of body column -->
+
+</tr>
+</table>
+    &nbsp;<br>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+	<td class="headingline"><img src="images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+    </tr>
+    </table>
+    <table class="copyright" width="100%">
+    <tr>
+    <td valign=top>Copyright &copy; 2002-2004 <a href="http://www.realvnc.com/contact.html">RealVNC</a> Ltd</td>
+    <td valign=top align=right>RealVNC and the RealVNC logos are trademarks of RealVNC Ltd</td></tr>
+    </table>
+</body>
+</html>
+

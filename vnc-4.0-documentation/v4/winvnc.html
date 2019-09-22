@@ -1,0 +1,522 @@
+<!-- winvnc.html; converted from winvnc.htpp by wwwpp.pl -->
+<!--               at 17:41:55 on 16/06/2004 -->
+<!-- Don't edit this file - edit the htpp version! -->
+    <!doctype html public "-//W3C//DTD HTML 3.2 Final//EN">
+    <html>
+
+    <head>
+<meta name="keywords" content="VNC, real, RealVNC, AT&T Laboratories Cambridge, Virtual Network Computing, WinVNC, remote control, thin-client, software">
+<meta name="description" content="RealVNC is the official home of VNC, staffed by the original team who created and developed it whilst at AT&T. VNC uses an open platform-independent protocol to allow desktop remote control.">
+<title>RealVNC - VNC Server 4.0 for Windows</title>
+<link rel="stylesheet" href="../realvnc.css" type="text/css"><link rel="shortcut icon" href="../favicon.ico" type="text/css">
+    </head>
+
+    <body class=bodybackground>
+
+<table width="100%" cellpadding="0" cellspacing="5" border="0" align="center">
+    <tr>
+                <td valign="top">
+		<img src="../images/logo150x150.gif" align="left" alt="RealVNC Logo" border="0">
+		</td>
+		<td width="2.5%"></td>
+		<td width="100%" align="center" valign="center">
+		<div class=titleheading>
+		VNC Server 4.0 for Windows
+		</div>
+		</td>
+    </tr>
+</table>
+ 
+<table width="100%" cellpadding="0" cellspacing="5" border="0">
+<tr>
+
+<td width="100%" valign="top" class="bodytext"><!-- START of body column -->
+
+
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Index</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+<a href="#1">Installation</a><br>
+<a href="#2">Using VNC Server in User-Mode</a><br>
+<a href="#3">Using VNC Server in Service-Mode</a><br>
+<a href="#4">Configuring VNC Server</a><br>
+<a href="#5">The Connection Options</a><br>
+<a href="#6">The Authentication Options</a><br>
+<a href="#7">The Input Options</a><br>
+<a href="#8">The Sharing Options</a><br>
+<a href="#Desktop">The Desktop Options</a><br>
+<a href="#9">The Hooking Options</a><br>
+<a href="#10">The Legacy Options and Importing 3.3 Settings</a><br>
+<a href="#Misc">Other Settings</a><br>
+<a href="#Platform_Notes">Platform Notes</a><br>
+<a href="#Platform_legacy">Windows 3.11 / Windows NT 3.51</a><br>
+<a href="#Platform_95">Windows 95</a><br>
+<a href="#Platform_98ME">Windows 98 / Windows ME</a><br>
+<a href="#Platform_NT4">Windows NT 4.0</a><br>
+<a href="#Platform_XP">Windows XP</a><br>
+<a href="#Platform_2003">Windows 2003 Server</a><br>
+	</td>
+	</tr>
+	</table>
+
+
+<a name=1>
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Installation</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+
+<p>VNC Server for Windows is installed as an optional component of the WinVNC setup package.  If VNC Server has been installed then a number of icons will be created for it under the Start Menu, at the location specified during installation (usually RealVNC).
+
+<p>VNC Server for Windows is designed to run either in User-Mode, as a personal per-user server, or in Service-Mode, as a system service available whether or not there is a user logged in.
+
+<p>The logged-on user can also choose to run their own personal User-Mode server alongside an existing Service-Mode server installed on the machine, provided that the two servers are configured to operate on different network port numbers.
+
+	</td>
+	</tr>
+	</table>
+
+
+<a name=2>
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Using VNC Server in User-Mode</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+
+<p>If you are just trying out VNC, or wish to provide access to your desktop infrequently, for support or collaboration purposes, then you may find it best to run VNC Server in User-Mode.
+
+<p>During the installation, leave the tickboxes which refer to the VNC Server System Service unticked, to prevent VNC Server being installed in Service-Mode on your system.
+
+<center><img SRC="images/winvnc4_startmenu.gif" align=center></center>
+
+<p>When you want to use VNC Server, go to the VNC Server (User-Mode) program group (usually found under RealVNC in the Start Menu), and click on Run VNC Server.  The VNC Server icon will appear in the system tray, to indicate that VNC Server is running.
+
+<center><img SRC="images/winvnc4_traymenu.gif" align=center></center>
+
+<p>At this point, you probably want to configure your personal VNC Server settings for User-Mode.  Right-click on the tray icon and select Options..., change the settings you want and click Apply or Ok.  Note that you must at least configure the Authentication tab, otherwise you won't be able to connect in to your server - this is deliberately the case, to avoid accidentally opening up your computer to attacks.
+
+<p>When you are finished with VNC Server, simply select Close VNC Server from the tray icon's menu.
+
+	</td>
+	</tr>
+	</table>
+
+
+<a name=3>
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Using VNC Server in Service-Mode</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+
+<p>If you intend to use VNC to provide remote access to a computer, you will probably prefer to install VNC Server in Service-Mode.  In Service-Mode, VNC Server can allow remote connections even while the computer is locked or logged off.  The server is configured once, rather than per-user, and the settings are secured if the host platform supports it.
+
+<p>During the installation, tick each of the boxes which refer to the VNC Server System Service.  This will cause the installer to present the VNC Server Options dialog, and to register and run the VNC Server Service.
+
+<p>Note that you must at least configure the Authentication tab, otherwise you won't be able to connect in to your server - this is deliberately the case, to avoid accidentally opening up your computer to attacks.
+
+<p>At this point, your VNC Server is running and you should be able to connect to it from a connected computer using VNC Viewer.
+
+<p>If you need to reconfigure or stop your Service-Mode server, you will find links in the VNC Server (Service-Mode) program group of the Start Menu to achieve this.  See the Service-Mode docs for more details.
+
+	</td>
+	</tr>
+	</table>
+
+
+<a name=4>
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Configuring VNC Server</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+
+<p>VNC Server provides a number of options allowing its behaviour to be tailored to your needs.  These are usually configured via the VNC Config applet's Options dialog, although they can also be specified directly on the command-line of the WinVNC4 executable if required.
+<p>The Options dialog consists of a number of pages of options, grouped according to their function.  The following documentation describes each option and the equivalent command-line parameters.
+
+<p>When the Ok or Apply buttons of the Options dialog are pressed, any changed settings are saved to the registry.  Unless otherwise specified, changed settings take effect immediately.
+
+<a name=5>
+
+<h4>Connections</h4>
+
+<center><img SRC="images/winvnc4_connections.gif" align=center></center>
+
+<p><tt>PortNumber=(port number)</tt><br><i>Accept connections on port</i>
+<p>VNC Server accepts incoming connection requests from clients on a particular TCP port.  By default, this is port number 5900, which equates to VNC display number 0 (zero), but in practice, any available port number can be used.
+
+<p><tt>IdleTimeout=(seconds)</tt><br><i>Disconnect idle clients after</i>
+<p>An idle client is one which has transmitted no keyboard or pointer events for more than a certain length of time.  The VNC Server can be configured with a threshold, expressed in seconds, after which idle clients will be disconnected to conserve resources.  If the threshold specified is zero seconds then connections will never timeout.  The default idle timeout is one hour.
+<p>Note that pointer and keyboard events received from clients will prevent their connection timing out even if the VNC Server is configured to otherwiseignore those events (see below).
+
+<p><tt>HTTPPortNumber=(port number)</tt><br><i>Serve Java viewer via HTTP on port</i>
+<p>If the port number specified is non-zero then VNC Server will accept incoming HTTP requests, allowing the Java VNC Viewer to be downloaded by a Java-aware web browser.  The VNC Server Configuration interface will set the HTTP port to have a number one hundred lower than the specified VNC port number, but this may be overridden to use a custom port number if required.
+
+<p><tt>LocalHost=true/false</tt><br><i>Only accept connections from the local host</i>
+<p>If the server is configured to only accept connections from the local host then the Access control setting is ignored, and VNC Server will be completely innaccessible via all network interfaces except the local loopback interface.  This setting is only normally useful when tunnelling VNC sessions into the server, for instance via Secure Shell (SSH).
+
+<p><tt>Hosts=(pattern)</tt><br><i>Access Control</i>
+<p>VNC Server can filter incoming connection attempts based upon the apparent IP addresses of their originators.  Which IP addresses are allowed to connect and which are not is determined by the Hosts pattern.  The pattern consists of a comma-separated list of IP address specifications.  Each specification starts with an action, gives an IP address, and a subnet-style mask.  The <i>first</i> specification to match the address of the new connection determines the action that will performed.
+<p>e.g. <tt>Hosts=+192.168.0.1/255.255.255.255,+192.168.1.0/255.255.255.0,-</tt>
+<p>The pattern given above allows the computer with address <tt>192.168.0.1</tt> to connect, as well as <i>any</i> computer in the <tt>192.168.1</tt> subnet.  All other connections are rejected by the <tt>-</tt> term, which is actually redundant in this case - a connection will always be rejected if it doesn't match anything in the Hosts pattern.
+<p>Note that IP addresses and masks are specified in Type-A (xxx.yyyyyyyyy), Type-B (xxx.yyy.zzzzzz) or Type-C (xxx.yyy.zzz.www) form.  The specification <tt>192.168</tt> will therefore be interpreted as <tt>192.0.0.168</tt> rather than <tt>192.168.0.0</tt> as one might expect.
+<p>The Hosts pattern can be edited more easily through the Access Control interface, which allows IP address specifications to be edited individually and moved up (to match first) or down (to match last) the list.
+
+<a name=6>
+
+<h4>Authentication</h4>
+
+<center><img SRC="images/winvnc4_authentication.gif" align=center></center>
+
+<p>The Authentication page allows you to configure the required level of authentication of incoming VNC Viewer connections.  At present, only two levels are provided - no authentication or classic VNC authentication.  Some new authentication methods are in development, so expect this page to grow.
+
+<p><tt>SecurityTypes=None</tt><br><i>No Authentication or Encryption</i>
+<p>If your VNC Server is operating in a protected environment, such as a secure LAN or firewall-protected network, then you may wish to configure VNC Server to accept connections without requiring a username or password to be specified.  This might be useful when tunnelling VNC over a secure protocol such as SSH, for example, to remove one redundant level of authentication.
+<p><strong>We advise <i>extreme</i> caution when disabling authentication.  Do not disable it unless you are <i>absolutely sure</i> that the host network is <i>completely</i> secure.</strong>
+
+<p><tt>SecurityTypes=VncAuth</tt><br><i>VNC 3.3 Authentication, no Encryption</i>
+<p>Most VNC Server configurations should at least be protected by a password required in order to authenticate the remote user to the server.  This setting requires that the user provide the correct password when connecting, but carries out the rest of the VNC session with no encryption.
+<p>The password to use can be configured by selecting Set Password and typing the new password twice.  On platforms which support it, the password (and all other configuration options) are protected using native operating system security methods, so that the password cannot be read or tampered with by other users.
+
+<p><tt>QueryConnect=true/false</tt><br><i>Prompt local user to accept incoming connection</i>
+<p>If this option is set then a dialog will be presented on the local desktop, prompting the user to accept or reject the connection.  If no response is received while the dialog is displayed then the connection will be automatically rejected.  If another connection is received while the dialog is displayed then it will be rejected automatically.
+<center><img SRC="images/winvnc4_queryconnect.gif" align=center></center>
+
+<a name=7>
+
+<h4>Inputs</h4>
+
+<center><img SRC="images/winvnc4_inputs.gif" align=center></center>
+
+<p><tt>AcceptPointerEvents=true/false</tt><br><i>Accept pointer events from clients</i>
+<p>If this option is unticked then incoming pointer movements from all clients will be ignored, preventing any remote VNC Viewer from affecting the pointer of the VNC Server's desktop.  This can be used to configure a server to become effectively view-only.
+<p>Note that a client will still be deemed active for the purposes of the IdleTimeout setting if it is sending pointer events to the server, whether or not they are accepted.
+
+<p><tt>AcceptKeyEvents=true/false</tt><br><i>Accept keyboard events from clients</i>
+<p>If this option is unticked then incoming keystrokes from all clients will be ignored, preventing any remote VNC Viewer from typing into the VNC Server's desktop.  This can be used to configure a server to become effectively view-only.
+<p>Note that a client will still be deemed active for the purposes of the IdleTimeout setting if it is sending keyboard events to the server, whether or not they are accepted.
+
+<p><tt>AcceptCutText=true/false</tt><br><i>Accept clipboard updates from clients</i>
+<p>If this option is unticked then incoming clipboard updates will be ignored from all clients.  This option should be used when making a VNC Server effectively view-only, but may also prove useful to prevent clipboard changes made by clients from overriding the VNC Server's local clipboard when this would be undesirable or confusing.
+
+<p><tt>SendCutText=true/false</tt><br><i>Send clipboard updates to clients</i>
+<p>This option, if unticked, prevents the VNC Server from informing clients of changes to its local clipboard contents.  This can be useful when untrusted clients are to be allowed to connect to the VNC Server, since it prevents any private data being accidentally leaked via the clipboard.
+
+<p><i>Allow input events to affect the screen-saver</i>
+<p>This option determines whether keyboard and mouse events received from VNC Viewers can cause the screen-saver to be hidden.  This option is actually a system-wide setting and is not implemented by VNC Server itself, so there is no equivalent command-line option.  Some older Win32 platforms do not support this option.  It is recommended that this check-box be ticked, so that the screen-saver can be disabled by VNC Viewer input.
+
+<p><tt>DisableLocalInputs=true/false</tt><br><i>Disable local inputs while server is in use</i>
+<p>If this options is ticked then the local console keyboard and mouse will be ignored while there is one or more VNC session active.  The desktop will remain visible, but the local user will not be able to interact with it in any way.
+
+<a name=8>
+
+<h4>Sharing</h4>
+
+<center><img SRC="images/winvnc4_sharing.gif" align=center></center>
+
+<p><tt>AlwaysShared=true</tt><br><i>Always treat new connections as shared</i>
+<p>If this option is set then all incoming connections will be treated as shared, and thus not disconnect any existing connections, regardless of whether the connecting VNC Viewer requested that the connection be shared.
+
+<p><tt>NeverShared=true</tt><br><i>Never treat new connections as shared</i>
+<p>If this option is set then all incoming connections will be treated as non-shared.  VNC Server will therefore either disconnect any existing connections, or refuse the incoming connection, depending on whether non-shared connections are configured to replace existing ones (see below).
+
+<p><tt>AlwaysShared=false, NeverShared=false</tt><br><i>Use client's preferred sharing setting</i>
+<p>When connecting, VNC Viewer specified whether the connection should be shared or non-shared.  If this setting is configured then the VNC Viewer's preference will be respected.
+
+<p><tt>DisconnectClients=true/false</tt><br><i>Non-shared connections replace existing ones</i>
+<p>If an incoming connection is to be shared (either by choice or because AlwaysShared is set) then existing connections remain active.  If a connection is non-shared (either by choice or because NeverShared is set) then either the new connection must be rejected, or existing clients disconnected.
+<p>If this setting is configured then existing clients will be disconnected when a new non-shared connection is made.  Otherwise, they will remain, and the new connection will fail.
+
+<a name=Desktop>
+
+<h4>Desktop</h4>
+
+<center><img SRC="images/winvnc4_desktop.gif" align=center></center>
+
+<h5>While connected</h5>
+
+<p><tt>RemoveWallpaper=true/false</tt><br><i>Remove wallpaper</i>
+<p>This option causes the desktop wallpaper or Active Desktop background to be removed while there is at least one VNC session active.  When the final session ends, the wallpaper or Active Desktop will be restored.
+
+<p><tt>RemotePattern=true/false</tt><br><i>Remove background pattern</i>
+<p>This option causes the desktop pattern to be removed while there is at least one VNC session active.  When the final session ends, the pattern will be restored.
+
+<p><tt>DisableEffects=true/false</tt><br><i>Disable user interface effects</i>
+<p>This option causes most user interface effects such as alpha-blending, faded menus, scrolling menus, anti-aliased text and window animation to be switched off while there is at least one VNC session active.  When the final session ends, these effects will be restored.
+<p>Note that the range of effects disabled depends heavily on the operating version and applications.
+
+<h5>When last client disconnects</h5>
+
+<p><tt>DisconnectAction=None</tt><br><i>Do nothing</i>
+<p>Don't perform any special action when the last client disconnects.
+
+<p><tt>DisconnectAction=Lock</tt><br><i>Lock workstation</i>
+<p>Lock the workstation when the last client disconnects.  Note that this functionality is only available on Windows 2000 and above.
+
+<p><tt>DisconnectAction=Logoff</tt><br><i>Logoff user</i>
+<p>Logoff the current user when the last client disconnects.
+
+<a name=9>
+
+<h4>Hooks</h4>
+
+<center><img SRC="images/winvnc4_hooks.gif" align=center></center>
+
+<p><tt>UseHooks=true/false</tt><br><i>Use VNC Hooks to track graphical updates</i>
+<p>VNC Server is designed to support a variety of techniques for tracking changes to the local desktop.  This release supports the classic VNC Hooks technique.  VNC Server can either be configured to use VNC Hooks, or to continually poll the screen for changes.
+
+<p><tt>PollConsoleWindows=true/false</tt><br><i>Poll console windows for updates</i>
+<p>The VNC Hooks hooking technique cannot track console windows because of limitations in the operating system.  Instead, console windows may be polled for changes.  If this option is set then VNC Server will track the visible parts of console windows and poll those areas for changes.
+<p>Note that if you choose to disable VNC Hooks then you should also disable polling of console windows.
+
+<p><tt>CompareFB=true/false</tt><br><i>Filter out updates that have no effect</i>
+<p>Heuristic change tracking techniques, such as those used by VNC Hooks, often report changed areas that have changed very little.  Even fully accurate tracking systems can report areas have changed even when they have simply been re-drawn and hence have not actually changed.
+<p>Enabling this option allows VNC Server to only transmit those parts of the screen which have actually changed to viewers, drastically improving performance.
+
+<a name=10>
+
+<h4>Legacy</h4>
+
+<center><img SRC="images/winvnc4_legacy.gif" align=center></center>
+
+<p><i>Import VNC 3.3 Settings</i>
+<p>If you have configured WinVNC 3.3 on a machine then you can automatically have VNC Server 4 configure itself to match your existing 3.3 settings as closely as possible.  VNC Server 4 will warn you when it cannot match existing settings completely, or if they are no longer relevant.
+<p>If you choose to import settings to configure a User-Mode VNC Server then VNC Server will attempt to import your personal WinVNC 3.3 settings.  If you choose to import settings to configure a Service-Mode VNC Server then the WinVNC 3.3 Default settings on the local machine will be used.
+<p>Note that you must separately uninstall the WinVNC 3.3 service if you import the settings into VNC Server 4, or configure VNC Server 4 to operate on a different port number. 
+
+<p><tt>Protocol3.3=true/false</tt><br><i>Only use protocol version 3.3</i>
+<p>VNC Server 4 supports both the original VNC version 3.3 protocol, and the new VNC protocol versions 3.7 and 3.8.  Some third-party VNC software use non-standard version numbers which may cause incompatibility issues.  VNC Server 4 can therefore be configure to only ever use the original VNC protocol version 3.3, ensuring compatibility even with non-standard VNC Viewers.
+<p>Note that this option applies to all VNC connections and reduces the functionality available to connecting VNC Viewers.
+
+<a name=Misc>
+
+<h4>Other Settings</h4>
+
+<p><tt>DisableOptions=true/false</tt><br>
+<p>If DisableOptions is set to true then the Options item in the tray icon menu will be greyed out.  The VNC Server Configuration will still be accessible by running the VNC Config application, but will not be accessible via the tray menu.
+
+
+	</td>
+	</tr>
+	</table>
+
+
+<a name=Platform_Notes>
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Platform Notes</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+
+<a name=Platform_legacy>
+
+<h4>Windows 3.11 / Windows NT 3.51</h4>
+
+<p>VNC Server 4 is <em>not</em> designed to operate on 16-bit versions of Windows.  It will therefore not operate on Windows 3.11 or older.
+
+<p>VNC Server 4 is <em>not</em> designed to operate on Windows NT 3.51.  It may work on NT 3.51 but don't count on it. The older VNC 3.3.7 release can be used on Windows NT 3.51.
+
+<p>If you do need to run VNC Server 4 on one of the above platforms and find that this is not possible then you can <a href="http://www.realvnc.com/contact.html">contact us</a> to discuss commercial development options.
+
+<a name=Platform_95>
+
+<h4>Windows 95</h4>
+
+<p>VNC Server 4 is designed to operate only on Windows 95 systems which have Winsock 2.0 or higher installed.  The Winsock 2.0 upgrade package for Windows 95 is available <a href=http://www.microsoft.com/windows95/downloads/contents/wuadmintools/s_wunetworkingtools/w95sockets2/>here</a>.  If upgrading to Winsock 2.x is not possible then the older VNC 3.3.7 release can be used on Windows 95.
+
+<p>As with Windows 98 and Windows ME systems, it is not possible for the VNC Server settings to be secured in the system registry.  This is an intrinsic limitation of Windows 95.
+
+<a name=Platform_98ME>
+
+<h4>Windows 98 / Windows ME</h4>
+
+<p>Under Windows 98 and Windows ME it is not possible for the VNC settings (including the server's password) to be properly secured in the registry.  This is an intrinsic limitation of these platforms.
+
+<a name=Platform_NT4>
+
+<h4>Windows NT 4.0</h4>
+
+<p>There is a bug in Windows NT 4.0 prior to Service Pack 3 which will cause the operating system to fail with the familiar blue-screen of death if VNC is run in service mode.  Running VNC in application mode appears to be safe.  This bug affects all current releases of VNC, and the only fix is to upgrade the operating system to Service Pack 3 or later.
+
+<a name=Platform_XP>
+
+<h4>Windows XP</h4>
+
+<p>The Fast User Switching and Remote Desktop features of Windows XP can prevent VNC Server from operating correctly, due to limitations in the Windows Service mechanism.  We recommend avoiding use of Fast User Switching and Remote Desktop facilities in Windows XP.
+
+<a name=Platform_2003>
+
+<h4>Windows 2003 Server</h4>
+
+<p>VNC Server 4 is designed to be compatible with Windows 2003 Server.
+
+	</td>
+	</tr>
+	</table>
+
+
+
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+        <td>
+        <div class="heading">Problems?</div>
+	</td>
+	<td align=right>
+        <div class="heading"></div>
+	</td>
+        </tr>
+        <tr>
+        <td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+        </tr>
+        </table>
+
+        <table cellpadding="0" cellspacing="10" border="0"
+        class="bodytext">
+        <tr>
+        <td>
+
+
+If you have difficulties which are not covered by this document, try reading
+the <a href="../faq.html">FAQ</a>. There are also some pages to help with <a href="../troubleshooting.html">troubleshooting</a>.
+
+<p>
+
+If that doesn't help then try <a
+href="http://www.realvnc.com/swish-e/search2/vnc-list">searching</a>
+the archives. There are tens of thousands of items collected over several years.
+
+<p>
+
+If that doesn't help then try <a
+href="http://www.realvnc.com/lists.html">subscribing to the mailing list</a> and ask your question there.  
+
+	</td>
+	</tr>
+	</table>
+
+
+</td><!-- END of body column -->
+
+</tr>
+</table>
+    &nbsp;<br>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+	<td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+    </tr>
+    </table>
+    <table class="copyright" width="100%">
+    <tr>
+    <td valign=top>Copyright &copy; 2002-2004 <a href="http://www.realvnc.com/contact.html">RealVNC</a> Ltd</td>
+    <td valign=top align=right>RealVNC and the RealVNC logos are trademarks of RealVNC Ltd</td></tr>
+    </table>
+</body>
+</html>
+

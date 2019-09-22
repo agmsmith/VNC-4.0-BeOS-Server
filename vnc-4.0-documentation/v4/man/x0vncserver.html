@@ -1,0 +1,53 @@
+<HTML><HEAD><TITLE>x0vncserver(1) manual page</TITLE>
+</HEAD><BODY>
+<TT>
+<H2>NAME</H2>
+
+x0vncserver - VNC server which continuously polls an X display
+<A NAME="lbAC">&nbsp;</A>
+<H2>SYNOPSIS</H2>
+
+<B>x0vncserver</B>
+
+[<I>parameters</I>]
+<A NAME="lbAD">&nbsp;</A>
+<H2>DESCRIPTION</H2>
+
+<B>x0vncserver</B>
+
+is a VNC server which continuously polls any X display, allowing it to be
+controlled via VNC.  How usable it will be depends a lot on the machine it's
+running on, and what you're expecting.  It won't be as fast as Xvnc or a native
+X server with VNC support compiled in, but in many cases it is the best option
+since it is just an ordinary X application requiring no special installation.
+<P>
+It has many of the same parameters as Xvnc.  Running <B>x0vncserver -h</B> will
+give a list of parameters with descriptions.  Note that you need to explicitly
+specify an appropriate password file using the PasswordFile parameter.
+<P>
+<A NAME="lbAE">&nbsp;</A>
+<H2>SEE ALSO</H2>
+
+<B><A HREF="Xvnc.html">Xvnc</A></B>(1)
+
+<B><A HREF="vncpasswd.html">vncpasswd</A></B>(1),
+
+<B><A HREF="vncviewer.html">vncviewer</A></B>(1),
+
+<B><A HREF="vncserver.html">vncserver</A></B>(1),
+
+<BR>
+
+<A HREF="http://www.realvnc.com">http://www.realvnc.com</A>
+<P>
+<A NAME="lbAF">&nbsp;</A>
+<H2>AUTHOR</H2>
+
+Tristan Richardson, RealVNC Ltd.
+<P>
+VNC was originally developed by the RealVNC team while at Olivetti Research Ltd
+/ AT&amp;T Laboratories Cambridge.  It is now being maintained by RealVNC Ltd.  See
+<A HREF="http://www.realvnc.com">http://www.realvnc.com</A> for details.
+<P>
+
+</TT></BODY></HTML>

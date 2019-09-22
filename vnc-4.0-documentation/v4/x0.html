@@ -1,0 +1,89 @@
+<!-- x0.html; converted from x0.htpp by wwwpp.pl -->
+<!--               at 17:41:55 on 16/06/2004 -->
+<!-- Don't edit this file - edit the htpp version! -->
+    <!doctype html public "-//W3C//DTD HTML 3.2 Final//EN">
+    <html>
+
+    <head>
+<meta name="keywords" content="VNC, real, RealVNC, AT&T Laboratories Cambridge, Virtual Network Computing, WinVNC, remote control, thin-client, software">
+<meta name="description" content="RealVNC is the official home of VNC, staffed by the original team who created and developed it whilst at AT&T. VNC uses an open platform-independent protocol to allow desktop remote control.">
+<title>RealVNC - Native X display support</title>
+<link rel="stylesheet" href="../realvnc.css" type="text/css"><link rel="shortcut icon" href="../favicon.ico" type="text/css">
+    </head>
+
+    <body class=bodybackground>
+
+<table width="100%" cellpadding="0" cellspacing="5" border="0" align="center">
+    <tr>
+                <td valign="top">
+		<img src="../images/logo150x150.gif" align="left" alt="RealVNC Logo" border="0">
+		</td>
+		<td width="2.5%"></td>
+		<td width="100%" align="center" valign="center">
+		<div class=titleheading>
+		Native X display support
+		</div>
+		</td>
+    </tr>
+</table>
+ 
+<table width="100%" cellpadding="0" cellspacing="5" border="0">
+<tr>
+
+<td width="100%" valign="top" class="bodytext"><!-- START of body column -->
+
+
+
+In VNC version 4, the VNC server functionality has been split cleanly from the
+X server, allowing the Xvnc server to be built on almost any platform on which
+an X server will build.
+<p>
+This also makes it possible to remote the native X server (i.e. the ":0" X
+display).  There are three ways this can be done.  For XFree86 version 4 X
+servers, a loadable module is provided which adds the VNC server functionality.
+For other X servers it is possible to build a replacement for the native X
+server binary which is VNC-enabled.  A third way is an inefficient but
+non-invasive VNC server called
+<a href="man/x0vncserver.html">x0vncserver</a>, which continuously polls any
+X display, allowing it to be controlled via VNC.
+<p>
+If your native X server is an XFree86 version 4 server, then the vnc.so module
+should be copied to the /usr/X11R6/lib/modules/extensions directory.  It can be
+enabled like any other module by adding a Load "vnc" line to the Module section
+of XF86Config.  The parameters listed in the Xvnc manual page can be set as
+options in XF86Config.  You will need to set either the "passwordFile"
+parameter or set the "securityTypes" parameter to "None" if you really don't
+want any authentication.  Note that options cannot be set in the Module section
+of XF86Config - try the Screen section.  For example:
+
+<PRE>
+Section "Module"
+        ...
+        Load "vnc"
+EndSection
+...
+Section "Screen"
+        ...
+        Option "passwordFile" "/root/.vnc/passwd"
+EndSection
+</PRE>
+
+
+</td><!-- END of body column -->
+
+</tr>
+</table>
+    &nbsp;<br>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+	<td class="headingline"><img src="../images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+    </tr>
+    </table>
+    <table class="copyright" width="100%">
+    <tr>
+    <td valign=top>Copyright &copy; 2002-2004 <a href="http://www.realvnc.com/contact.html">RealVNC</a> Ltd</td>
+    <td valign=top align=right>RealVNC and the RealVNC logos are trademarks of RealVNC Ltd</td></tr>
+    </table>
+</body>
+</html>
+

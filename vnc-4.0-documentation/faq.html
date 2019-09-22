@@ -1,0 +1,361 @@
+<!-- faq.html; converted from faq.htpp by wwwpp.pl -->
+<!--               at 17:41:54 on 16/06/2004 -->
+<!-- Don't edit this file - edit the htpp version! -->
+    <!doctype html public "-//W3C//DTD HTML 3.2 Final//EN">
+    <html>
+
+    <head>
+<meta name="keywords" content="VNC, real, RealVNC, AT&T Laboratories Cambridge, Virtual Network Computing, WinVNC, remote control, thin-client, software">
+<meta name="description" content="RealVNC is the official home of VNC, staffed by the original team who created and developed it whilst at AT&T. VNC uses an open platform-independent protocol to allow desktop remote control.">
+<title>RealVNC - Frequently Asked Questions</title>
+<link rel="stylesheet" href="realvnc.css" type="text/css"><link rel="shortcut icon" href="favicon.ico" type="text/css">
+    </head>
+
+    <body class=bodybackground>
+
+<table width="100%" cellpadding="0" cellspacing="5" border="0" align="center">
+    <tr>
+                <td valign="top">
+		<img src="images/logo150x150.gif" align="left" alt="RealVNC Logo" border="0">
+		</td>
+		<td width="2.5%"></td>
+		<td width="100%" align="center" valign="center">
+		<div class=titleheading>
+		Frequently Asked Questions
+		</div>
+		</td>
+    </tr>
+</table>
+ 
+<table width="100%" cellpadding="0" cellspacing="5" border="0">
+<tr>
+
+<td width="100%" valign="top" class="bodytext"><!-- START of body column -->
+
+
+
+We're building up a new and easier to use FAQ here. If you don't find an
+answer to your question below, try the following:
+
+<ul>
+
+<li> carefully read the <a href="documentation.html">documentation</a>.
+
+<li> check the list of known bugs and features in <a href="http://www.realvnc.com/v4/known-bugs.html">VNC 4.0</a> and <a href="http://www.realvnc.com/v3/3.3.7-known-bugs.html">VNC 3.3.7</a>.
+
+<li> browse the <a href="troubleshooting.html">troubleshooting pages.
+
+<li> <a href="http://www.realvnc.com/swish-e/search2/vnc-list">search</a> the
+mailing list archives. 
+
+<li> <a href="http://www.realvnc.com/lists.html">subscribe</a> to the mailing list and ask your question there. 
+
+<li> look in the <a href="http://www.uk.research.att.com/archive/vnc/faq.html">old FAQ</a>.
+
+</ul>
+
+<h2>Questions</h2>
+
+<A HREF="#hide">
+Can I hide the taskbar icon created by the Windows VNC Server?
+</A>
+<p>
+
+<A HREF="#ping">
+Why can't my VNC viewer connect to my VNC server?
+</A>
+<p>
+
+<A HREF="#internet">
+Can I use VNC to remotely control another computer across the internet?
+</A>
+<p>
+
+<A HREF="#ctrl-alt-del">
+Ctrl-Alt-Del isn't getting through to the other computer
+</A>
+<p>
+
+<A HREF="#security">
+Is VNC secure?
+</A>
+<p>
+
+<A HREF="#firewall">
+How do I use VNC through my firewall?
+</A>
+<p>
+
+
+<A HREF="#authorisation">
+Can I prevent people shutting down the Windows VNC Server?
+</A>
+<p>
+
+
+<A HREF="#authorisation">
+Can I prevent people changing the Windows VNC Server settings?
+</A>
+<p>
+
+
+<A HREF="#grey">
+Why do I just get a grey desktop in my Unix VNC Server?
+</A>
+<p>
+
+
+<A HREF="#x0">
+Can I remote the normal X:0 display of my Unix workstation?
+</A>
+<p>
+
+
+<A HREF="#mac">
+Is there a version for Mac OS X?
+</A>
+<p>
+
+<A HREF="#port">
+Can I make the VNC server listen on a different port number rather than 5900?
+</A>
+<p>
+
+<A HREF="#scaling">
+Why does the VNC viewer blue-screen my Windows PC when I use the experimental
+scaling feature?
+</A>
+<p>
+
+<h2>Answers</h2>
+
+<A NAME="hide"></A> 
+<B> 
+Can I hide the taskbar icon created by the Windows VNC Server?
+</B>
+<br> 
+
+No, not without changing and recompiling the source code. We feel that
+there would be few legitimate uses of VNC where you would need to
+conceal its operation. However, there might be occasions where you
+would not want the user of the server machine to be able to adjust the
+WinVNC settings, password, etc, so access to the VNC Server Configuration can be disabled.  See the DisableOptions setting in the <a href="v4/winvnc.html">VNC Server for Windows documentation</a>.
+
+<p>
+
+<A NAME="ping"></A> 
+<B> 
+Why can't my VNC viewer connect to my VNC server?
+</B>
+<br> 
+
+VNC requires TCP/IP network connectivity between the viewer and server
+computers. A simple test is to use the ping utility. If you can't ping
+from your viewer to your server, and vice-versa, than VNC will not
+work!
+
+<p>
+
+<A NAME="internet"></A>
+<B>
+Can I use VNC to remotely control another computer across the internet?
+</B>
+<br>
+
+Yes. VNC uses the TCP/IP protocol which is the networking standard of
+the Internet. You can use VNC over LANs, WANs, broadband ISP, and
+modem dialup ISP. The performance will vary with the amount of
+networking bandwidth you have, but there are special encodings and
+compression to make the most out of the bandwidth available. There is
+also an automatic linespeed detector, which will dynamically switch in
+the most suitable compression scheme for the connection you have. You
+should read the FAQ on <a href="#4">security</a>, and about <a
+href="#5">using VNC through firewalls</a>.
+
+<p>
+
+<A NAME="ctrl-alt-del"></A>
+<B>
+Ctrl-Alt-Del isn't getting through to the other computer
+</B>
+<br>
+
+If you're running the VNC viewer under Windows, then the Ctrl-Alt-Del
+keypress may be intercepted by the operating system, and so the viewer
+program won't be able to detect it and pass it to a VNC Server. Go to
+the viewer's system menu, which you can pull down by left-clicking on
+the VNC icon at the top left of the viewer window, or by
+right-clicking on the viewer entry in the taskbar. In this menu, you
+will find a "Send Ctrl-Alt-Del" option. Alternatively, You might find that
+Shift-Ctrl-Alt-Del works. AltGr-Del often works as well.
+
+<p>
+
+Under Unix, some window managers also intercept the Ctrl-Alt-Del
+keypress. The Unix VNC viewer also has a "Send Ctrl-Alt-Del" function
+which is accessible via the popup menu which you can pull down by
+pressing the "f8" key in the viewer window.
+
+<p>
+
+If you're running the VNC server as an application under Windows
+NT/2000/XP then it can only provide remote access to the display if a
+user is logged in and the workstation is not locked. In order to allow
+the Ctrl-Alt-Del keypress to work and be accessed even if no user is
+logged in or it is locked, you must run the VNC server as a system
+service.
+
+<p>
+
+If you're running the VNC server under Windows 95/98/ME then sending a
+remote Ctrl-Alt-Del function will not work at all. On these platforms,
+Ctrl-Alt-Del causes all programs, including the VNC server, to halt
+and bring up a task manager window.
+
+<p>
+
+<A NAME="security"></A>
+<B>
+Is VNC secure?
+</B>
+<br>
+
+The only really secure computer is one without a network. VNC requires
+a password when a viewer tries to connect to a server. This password
+is encrypted to deter snooping, but the following graphical data, the
+VNC protocol, is not. In many ways, VNC is more secure than remote
+login programs such as telnet where the password is and the following
+data are sent in the clear as ascii characters. Many people find it
+perfectly acceptable to use VNC like this behind a corporate firewall,
+across a VPN, or between computers within the home. However, if the
+computer or network is connected to the internet, we strongly advise
+the use of additional security. See <a
+href="http://www.uk.research.att.com/archive/vnc/sshvnc.html">how to make VNC
+secure using SSH</a>. You might want to know how to use <a
+href="#5">VNC with a firewall</a>.
+
+
+<p>
+
+<A NAME="firewall"></A>
+<B>
+How do I use VNC through my firewall?
+</B>
+<br>
+
+Many organisations operate firewalls to reduce the risk of intrusion by malicious attackers via the Internet.  These firewalls typically operate by only allowing connections in to machines in that organisation on specific ports.  Which ports are permitted access depends upon the network protocol that uses the port and the degree of security it provides.
+
+VNC servers can accept incoming connections through firewalls in two main ways.  Although the first is usually the simplest to arrange, we recommend using the SSH tunnelling method wherever VNC is to be used over an untrusted network such as the Internet.
+
+<ul>
+<li><i>Opening Ports</i> - The simplest way to allow VNC connections in through your firewall is to configure your firewalling software to allow connections to the VNC ports.  If <i>N</i> is the display number of a particular VNC server then it will accept connections on port 5900+<i>N</i>.  Configuring your firewall to allow connections to this port will allow VNC to work.  If you wish to use the in-built web server and Java VNC Viewer then you will also need to allow connections to port 5800+<i>N</i>.  Unfortunately, because VNC traffic is not encrypted, this approach weakens the security provided by your firewall, and so is not advisable.</li>
+<li><i>Secure Tunnelling</i> - Most organisations that operate firewalls allow connections to a number of standard ports, that are in principle used only by secure or harmless protocols.  While VNC in its present incarnation is not suitably secure for this to be advisable, it can be "tunnelled" through a secure protocol layer to achieve the same effect.  The Secure Shell (SSH) protocol is one example of such a wrapper, and is one which most firewalls allow access through.  The Secure Shell client is run on the VNC client computer and is made to forward connections to a particular port on that machine to a port on the VNC server machine.  The forwarded connection is encrypted by the SSH software, which can provide both encryption and authentication. For more details on how to do this, see
+<a href="http://www.uk.research.att.com/archive/vnc/sshvnc.html">here</a>.
+</li>
+</ul>
+
+<p>
+
+<A NAME="authorisation"></A>
+<B>
+Can I prevent people shutting down the Windows VNC Server?
+<br>
+Can I prevent people changing the Windows VNC Server settings?
+</B>
+<br>
+VNC Server 4.0 for Windows can be run either in Application Mode or Service Mode.
+
+In Application Mode, the user runs their own copy and has full control over the settings and can control the server and shut it down.
+
+In Service Mode, the Close VNC Server menu option is greyed out and only Administrators can shut the service down, by default.  Similarly, only Administrators are permitted to change the VNC Server Configuration via the Options menu item.
+
+Additionally, the Optionn menu item in the tray icon menu can be greyed out by adding the <tt>DisableOptions</tt> setting to the server, as described in the <a href="v4/winvnc.html">VNC Server documentation</a>.
+
+<p>
+
+<A NAME="grey"></A>
+<B>
+Why do I just get a grey desktop in my Unix VNC Server?
+</B>
+<br>
+
+You should run the vncserver script to start a VNC server, rather than
+the Xvnc program directly. vncserver runs Xvnc with appropriate
+options and starts some X applications to be displayed in the VNC
+desktop. The applications it tries to start are specified in
+$HOME/.vnc/xstartup, which can be tailored to your requirements. The
+default setup is to run the 'twm' window manager and a single 'xterm'
+window. If these applications fail to run, then you will see a grey
+'rootweave' desktop. The most likely reason applications fail to run
+is that they are not in your path. Any error messages from this
+startup should appear in $HOME/.vnc/<i>host:display#</i>.log. For
+further information see the <a href="v4/man/vncserver.html">vncserver
+manual page</a>.
+
+<p>
+
+<A NAME="x0"></A>
+<B>
+Can I remote the normal X:0 display of my Unix workstation?
+</B>
+<br>
+
+The standard behaviour of VNC on Unix platforms is to start a completely new X
+desktop (:n) which is independent of the standard X display of the workstation
+(:0).  However <a href="v4">version 4.0 of VNC</a> has support for remoting the
+:0 display.  See <a href="v4/x0.html">Native X display support</a> for details.
+
+<p>
+
+<A NAME="mac"></A>
+<B>
+Is there a version for Mac OS X?
+</B>
+<br>
+We don't yet provide versions of VNC for Mac OS X.  There are several ports of VNC to Mac OS X, however, accessible via the <a href="resources.html">resources page</a>.
+
+<p>
+
+<A NAME="port"></A>
+<B>
+Can I make the VNC server listen on a different port number rather than 5900?
+</B>
+<br>
+Yes.  VNC Server for Windows Configuration allows the port numbers for VNC connections and for serving the Java Viewer to be configured.  See <a href="v4/winvnc.html#5">The Connection Options</a>. In Unix, you can specify it if you start Xvnc directly. See the <a href="v4/man/Xvnc.html">manual page</a>.
+
+<p>
+
+<A NAME="scaling"></A>
+<B>
+Why does VNC Viewer 3.3.7 blue-screen my Windows PC when I use the experimental
+scaling feature?
+</B>
+<br>
+Some graphics card drives include a bug in the scaling feature that
+causes them to crash the machine if certain ratios are used.  This is
+mostly the case with older drivers and with older graphics cards.
+
+
+</td><!-- END of body column -->
+
+</tr>
+</table>
+    &nbsp;<br>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+	<td class="headingline"><img src="images/pixel.gif" width="1" height="1" border="0" alt=""></td>
+    </tr>
+    </table>
+    <table class="copyright" width="100%">
+    <tr>
+    <td valign=top>Copyright &copy; 2002-2004 <a href="http://www.realvnc.com/contact.html">RealVNC</a> Ltd</td>
+    <td valign=top align=right>RealVNC and the RealVNC logos are trademarks of RealVNC Ltd</td></tr>
+    </table>
+</body>
+</html>
+
+
+
+
+
+
