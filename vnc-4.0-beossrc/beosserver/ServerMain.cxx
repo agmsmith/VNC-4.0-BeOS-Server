@@ -1,6 +1,6 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.31 2019/04/06 21:36:34 agmsmith Exp $
- * 
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.32 2019/09/23 15:21:30 agmsmith Exp $
+ *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
  * http://www.realvnc.com/), with BeOS adaptations by Alexander G. M. Smith.
@@ -22,11 +22,14 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.32  2019/09/23 15:21:30  agmsmith
+ * Added CapUpdateLines option and changed some wording.
+ *
  * Revision 1.31  2019/04/06 21:36:34  agmsmith
  * Add an option to hide the update counter display by moving the underlying
  * window off screen.  Extra complications arrise with BDirectWindow not
- * working if it is too far off screen (in BeOS), so make it just barely
- * touch the edge of the screen (rightmost X is zero).
+ * working if it is too far off screen (in BeOS), so make it just barely touch
+ * the edge of the screen (rightmost X is zero).
  *
  * Revision 1.30  2018/10/22 21:33:07  agmsmith
  * Print out version number and compile date when starting.
@@ -118,12 +121,12 @@
  * Check for a forced update too.
  *
  * Revision 1.6  2004/06/27 20:31:44  agmsmith
- * Got it working, so you can now see the desktop in different
- * video modes (except 8 bit).  Even lets you switch screens!
+ * Got it working, so you can now see the desktop in different video modes
+ * (except 8 bit).  Even lets you switch screens!
  *
  * Revision 1.5  2004/06/07 01:06:50  agmsmith
- * Starting to get the SDesktop working with the frame buffer
- * and a BDirectWindow.
+ * Starting to get the SDesktop working with the frame buffer and a
+ * BDirectWindow.
  *
  * Revision 1.4  2004/02/08 19:43:57  agmsmith
  * FrameBuffer class under construction.
@@ -187,7 +190,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.31 2019/04/06 21:36:34 agmsmith Exp $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.32 2019/09/23 15:21:30 agmsmith Exp $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -197,7 +200,10 @@ static const int k_DeadManPulseTimer = 3000000;
 static rfb::LogWriter vlog("ServerMain");
 
 static rfb::IntParameter port_number("PortNumber",
-  "TCP/IP port on which the server will accept connections",
+  "TCP/IP port on which the server will accept connections.  The well known "
+  "default is 5900, but you can specify anything from 1024 to 65535, so long "
+  "as the person operating the client side knows which number you are using.  "
+  "For slightly better security, try something over 40000.",
   5900);
 
 static rfb::IntParameter ThreadPriority ("ThreadPriority",
@@ -600,7 +606,7 @@ int main (int argc, char** argv)
       usage(argv[0]);
     }
 
-    vlog.info ("Starting vncserver, $Revision: 1.31 $, was compiled on "
+    vlog.info ("Starting vncserver, $Revision: 1.32 $, was compiled on "
       __DATE__ " at " __TIME__ ".", argv[0]);
 
     // Set the priority of the main polling thread.  If it's normal, than some

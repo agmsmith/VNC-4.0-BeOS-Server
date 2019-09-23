@@ -113,7 +113,8 @@ LogParameter::LogParameter()
   : StringParameter("Log",
     "Specifies which log output should be directed to "
     "which target logger, and the level of output to log. "
-    "Format is <log>:<target>:<level>[, ...].",
+    "Format is <log>:<target>:<level>[, ...].  "
+    "A typical useful one is *:stdout:99",
     "") {
 }
 

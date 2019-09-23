@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.40 2015/09/12 19:41:15 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.41 2019/09/23 15:21:30 agmsmith Exp $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.41  2019/09/23 15:21:30  agmsmith
+ * Added CapUpdateLines option and changed some wording.
+ *
  * Revision 1.40  2015/09/12 19:41:15  agmsmith
  * Turn off printing of the keymaps on startup.
  *
@@ -42,16 +45,15 @@
  *
  * Revision 1.37  2015/09/06 16:52:54  agmsmith
  * Change background content refresh to be every half second.  That way when
- * the user scrubbs the mouse, they'll see fairly recent content, even with
- * the slow BScreen capture technique.  Formerly you'd have to wait for a
- * full screen refresh before it would grab the actual screen contents.
+ * the user scrubbs the mouse, they'll see fairly recent content, even with the
+ * slow BScreen capture technique.  Formerly you'd have to wait for a full
+ * screen refresh before it would grab the actual screen contents.
  *
  * Revision 1.36  2015/09/04 23:55:59  agmsmith
- * On fast computers grab the screen contents on every sliver update,
- * not just at the start of every full screen update.  Lets you scrub
- * the screen with the mouse just like you can with the direct access
- * to video memory technique.  Makes VNC nicer on slow connections to
- * a fast virtual machine.
+ * On fast computers grab the screen contents on every sliver update, not just
+ * at the start of every full screen update.  Lets you scrub the screen with
+ * the mouse just like you can with the direct access to video memory
+ * technique.  Makes VNC nicer on slow connections to a fast virtual machine.
  *
  * Revision 1.35  2013/04/24 18:34:27  agmsmith
  * Fix PPC version cheap cursor graphics being mangled due to endienness.
@@ -63,27 +65,28 @@
  * Updated types to compile with GCC 4.6.3, mostly const and some type changes.
  *
  * Revision 1.32  2013/02/19 21:07:21  agmsmith
- * Fixed bug in unmapped key codes with code number wrong due to
- * loop optimisation that skipped updating the code.
+ * Fixed bug in unmapped key codes with code number wrong due to loop
+ * optimisation that skipped updating the code.
  *
  * Revision 1.31  2013/02/19 03:21:52  agmsmith
  * Doc wording.
  *
  * Revision 1.30  2013/02/18 17:30:00  agmsmith
- * Now sends fake shift and other modifier key presses to enable typing of letters
- * that are sent without the correct shift codes.  Like capital A on the iPad VNC
- * that sends it without any shift keys being pressed before it.  Also lets the
- * iPad send fancy codes like the currency symbols.  Added Euro to the table,
- * though BeOS doesn't have a pressable key for it.  Also fixed several bugs
- * with sending messages - wasn't sending some modifier key presses due to a
- * bug, also sends the Bytes part of the message properly (it can be more than
- * one byte for UTF-8 multibyte strings) and also send raw_char as the keycode for
- * the unmodified key corresponding to the key being pressed.
+ * Now sends fake shift and other modifier key presses to enable typing of
+ * letters that are sent without the correct shift codes.  Like capital A on
+ * the iPad VNC that sends it without any shift keys being pressed before it.
+ * Also lets the iPad send fancy codes like the currency symbols.  Added Euro
+ * to the table, though BeOS doesn't have a pressable key for it.  Also fixed
+ * several bugs with sending messages - wasn't sending some modifier key
+ * presses due to a bug, also sends the Bytes part of the message properly (it
+ * can be more than one byte for UTF-8 multibyte strings) and also send
+ * raw_char as the keycode for the unmodified key corresponding to the key
+ * being pressed.
  *
  * Revision 1.29  2013/02/12 22:18:33  agmsmith
- * Add a gradient bitmap for when no screen buffer is available,
- * add a timeout to locking the frame buffer so that Haiku can
- * work with its 0.5 second processing time limit.
+ * Add a gradient bitmap for when no screen buffer is available, add a timeout
+ * to locking the frame buffer so that Haiku can work with its 0.5 second
+ * processing time limit.
  *
  * Revision 1.28  2013/02/12 18:59:11  agmsmith
  * Reduce priority of debug message for update size changes.
@@ -92,83 +95,81 @@
  * Add a spot of white to the cursor.
  *
  * Revision 1.26  2011/11/11 21:57:54  agmsmith
- * Changed the cheap cursor to be twice as big and have a bit of colour,
- * so you can see it more easily on the iPad version of VNC.
+ * Changed the cheap cursor to be twice as big and have a bit of colour, so you
+ * can see it more easily on the iPad version of VNC.
  *
  * Revision 1.25  2005/02/14 02:31:01  agmsmith
- * Added an option to turn off various screen scanning methods,
- * and an option and code to draw a cursor in the outgoing data.
+ * Added an option to turn off various screen scanning methods, and an option
+ * and code to draw a cursor in the outgoing data.
  *
  * Revision 1.24  2005/02/13 01:42:05  agmsmith
- * Can now receive clipboard text from the remote clients and
- * put it on the BeOS clipboard.
+ * Can now receive clipboard text from the remote clients and put it on the
+ * BeOS clipboard.
  *
  * Revision 1.23  2005/02/06 22:03:10  agmsmith
- * Changed to use the new BScreen reading method if the
- * BDirectWindow one doesn't work.  Also removed the screen
- * mode slow change with the yellow bar fake screen.
+ * Changed to use the new BScreen reading method if the BDirectWindow one
+ * doesn't work.  Also removed the screen mode slow change with the yellow bar
+ * fake screen.
  *
  * Revision 1.22  2005/01/02 23:57:17  agmsmith
- * Fixed up control keys to avoid using the defective BeOS keyboard
- * mapping, which maps control-D to the End key and other similar
- * problems.
+ * Fixed up control keys to avoid using the defective BeOS keyboard mapping,
+ * which maps control-D to the End key and other similar problems.
  *
  * Revision 1.21  2005/01/02 21:57:29  agmsmith
- * Made the event injector simpler - only need one device, not
- * separate ones for keyboard and mouse.  Also renamed it to
- * InputEventInjector to be in line with it's more general use.
+ * Made the event injector simpler - only need one device, not separate ones
+ * for keyboard and mouse.  Also renamed it to InputEventInjector to be in line
+ * with it's more general use.
  *
  * Revision 1.20  2005/01/02 21:05:33  agmsmith
- * Found screen resolution bug - wasn't testing the screen width
- * or height to detect a change, just depth.  Along the way added
- * some cool colour shifting animations on a fake screen.
+ * Found screen resolution bug - wasn't testing the screen width or height to
+ * detect a change, just depth.  Along the way added some cool colour shifting
+ * animations on a fake screen.
  *
  * Revision 1.19  2005/01/01 21:31:02  agmsmith
- * Added double click timing detection, so that you can now double
- * click on a window title to minimize it.  Was missing the "clicks"
- * field in mouse down BMessages.
+ * Added double click timing detection, so that you can now double click on a
+ * window title to minimize it.  Was missing the "clicks" field in mouse down
+ * BMessages.
  *
  * Revision 1.18  2005/01/01 20:46:47  agmsmith
- * Make the default control/alt key swap detection be the alt is alt
- * and control is control setting, in case the keyboard isn't a
- * standard USA keyboard layout.
+ * Make the default control/alt key swap detection be the alt is alt and
+ * control is control setting, in case the keyboard isn't a standard USA
+ * keyboard layout.
  *
  * Revision 1.17  2005/01/01 20:34:34  agmsmith
- * Swap control and alt keys if the user's keymap has them swapped.
- * Since it uses a physical key code (92) to detect the left control
- * key, it won't work on all keyboards, just US standard.
+ * Swap control and alt keys if the user's keymap has them swapped.  Since it
+ * uses a physical key code (92) to detect the left control key, it won't work
+ * on all keyboards, just US standard.
  *
  * Revision 1.16  2004/12/13 03:57:37  agmsmith
- * Combined functions for doing background update with grabbing the
- * screen memory.  Also limit update size to at least 4 scan lines.
+ * Combined functions for doing background update with grabbing the screen
+ * memory.  Also limit update size to at least 4 scan lines.
  *
  * Revision 1.15  2004/12/02 02:24:28  agmsmith
- * Check for buggy operating systems which might allow the screen to
- * change memory addresses even while it is locked.
+ * Check for buggy operating systems which might allow the screen to change
+ * memory addresses even while it is locked.
  *
  * Revision 1.14  2004/11/28 00:22:11  agmsmith
  * Also show frame rate.
  *
  * Revision 1.13  2004/11/27 22:53:59  agmsmith
- * Changed update technique to scan a small part of the screen each time
- * so that big updates don't slow down the interactivity by being big.
- * There is also an adaptive algorithm that makes the updates small
- * enough to be quick on the average.
+ * Changed update technique to scan a small part of the screen each time so
+ * that big updates don't slow down the interactivity by being big.  There is
+ * also an adaptive algorithm that makes the updates small enough to be quick
+ * on the average.
  *
  * Revision 1.12  2004/09/13 01:41:24  agmsmith
  * Trying to get control keys working.
  *
  * Revision 1.11  2004/09/13 00:18:27  agmsmith
- * Do updates separately, only based on the timer running out,
- * so that other events all get processed first before the slow
- * screen update starts.
+ * Do updates separately, only based on the timer running out, so that other
+ * events all get processed first before the slow screen update starts.
  *
  * Revision 1.10  2004/08/23 00:51:59  agmsmith
  * Force an update shortly after a key press.
  *
  * Revision 1.9  2004/08/23 00:24:17  agmsmith
- * Added a search for plain keyboard keys, so now you can type text
- * over VNC!  But funny key combinations likely won't work.
+ * Added a search for plain keyboard keys, so now you can type text over VNC!
+ * But funny key combinations likely won't work.
  *
  * Revision 1.8  2004/08/22 21:15:38  agmsmith
  * Keyboard work continues, adding the Latin-1 character set.
@@ -187,12 +188,12 @@
  *
  * Revision 1.3  2004/07/05 00:53:32  agmsmith
  * Added mouse event handling - break down the network mouse event into
- * individual BMessages for the different mouse things, including the
- * mouse wheel.  Also add a forced refresh once in a while.
+ * individual BMessages for the different mouse things, including the mouse
+ * wheel.  Also add a forced refresh once in a while.
  *
  * Revision 1.2  2004/06/27 20:31:44  agmsmith
- * Got it working, so you can now see the desktop in different
- * video modes (except 8 bit).  Even lets you switch screens!
+ * Got it working, so you can now see the desktop in different video modes
+ * (except 8 bit).  Even lets you switch screens!
  *
  * Revision 1.1  2004/06/07 01:07:28  agmsmith
  * Initial revision
@@ -233,6 +234,38 @@
 
 static rfb::LogWriter vlog("SDesktopBeOS");
 
+static rfb::IntParameter CapUpdateLines ("CapUpdateLines",
+  "Limit the height of the sliver of screen checked for changes to be this "
+  "many scan lines.  Zero means no cap.  Other values from 1 to the height "
+  "of the screen or larger set the cap.  The system automatically adjusts "
+  "the size of each sliver of screen checked for changes to maintain an "
+  "update rate between 20 and 30 updates per second, which is usually good "
+  "for smooth mouse movement.  On a computer with a fast video card and good "
+  "bandwidth and not much happening, the size of the area checked can grow "
+  "to be the whole screen.  If suddenly lots of stuff changes on screen, "
+  "this can take quite a while to transmit, and during this time the mouse "
+  "isn't updated.  By capping the size (64 is a good compromise), you can "
+  "get smoother mouse movement when things change, and less memory bandwidth "
+  "and CPU used per updated sliver.  However, it will take many more slivers "
+  "to redraw the whole screen (each with network time delays), so the "
+  "overall full screen frame rate will be slower.  Note that this works best "
+  "with ScreenReaderBDirect mode, otherwise it's still reading a full screen "
+  "buffer every half second or so, not saving you any memory bandwidth or "
+  "CPU time, just network bandwidth.",
+  0);
+
+static rfb::BoolParameter ShowCheapCursor ("ShowCheapCursor",
+  "If you want to see a marker on the screen where the mouse may be, turn on "
+  "this parameter.  The shape (a blue/black/white cross large enough to be "
+  "visible on an iPad) gets sent to the client side, which will hopefully "
+  "display it instead of your usual mouse cursor or no cursor.  If there "
+  "was a way of getting the current BeOS cursor shape, we'd use that.  "
+  "Alternatively you can try booting in safe video mode, then the cursor is "
+  "drawn into the screen bitmap rather than done as a separate hardware "
+  "cursor, but its movements can annoyingly lag the real position on slow "
+  "network connections.",
+  1);
+
 static rfb::BoolParameter TryBDirectWindow ("ScreenReaderBDirect",
   "Set to TRUE if you want to include the BDirectWindow screen reader "
   "technique in the set of techniques the program attempts to use.  "
@@ -256,17 +289,6 @@ static rfb::BoolParameter TryBScreen ("ScreenReaderBScreen",
   "mouse cursor, since the cursor is actually drawn into the frame buffer "
   "by BeOS rather than using a hardware sprite.",
   1);
-
-static rfb::BoolParameter ShowCheapCursor ("ShowCheapCursor",
-  "If you want to see a marker on the screen where the mouse may be, turn on "
-  "this parameter.  The shape (a blue/black/white cross large enough to be "
-  "visible on an iPad) gets sent to the client side, which will hopefully "
-  "display it instead of your usual mouse cursor or no cursor.  If there "
-  "was a way of getting the current BeOS cursor shape, we'd use that.  "
-  "Alternatively you can try booting in safe video mode, then the cursor is "
-  "drawn into the screen bitmap rather than done as a separate hardware "
-  "cursor, but it is very slow.",
-  0);
 
 
 static char UTF8_Backspace [] = {B_BACKSPACE, 0};
@@ -844,6 +866,12 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
           m_BackgroundNumberOfScanLinesPerUpdate = 4;
         else if (m_BackgroundNumberOfScanLinesPerUpdate > Height)
           m_BackgroundNumberOfScanLinesPerUpdate = Height;
+
+        if (CapUpdateLines > 0)
+        {
+          if (m_BackgroundNumberOfScanLinesPerUpdate > CapUpdateLines)
+            m_BackgroundNumberOfScanLinesPerUpdate = CapUpdateLines;
+        }
 
         m_BackgroundNextScanLineY = 0;
         m_FrameBufferBeOSPntr->GrabScreen ();

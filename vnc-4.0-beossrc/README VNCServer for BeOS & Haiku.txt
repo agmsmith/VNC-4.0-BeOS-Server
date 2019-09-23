@@ -2,7 +2,7 @@ Short: VNC Remote Screen and Keyboard access for BeOS and Haiku OS.
 Author: agmsmith@ncf.ca (Alexander G. M. Smith)
 Uploader: agmsmith@ncf.ca (Alexander G. M. Smith)
 Website: http://web.ncf.ca/au829/
-Version: 4.0-BeOS-AGMS-1.30
+Version: 4.0-BeOS-AGMS-1.32
 Type: Internet & Network / Servers / Remote Access
 Requires: BeOS R5 (Intel or PowerPC) or Haiku OS R1 (x86 32 bit, gcc2 build)
 
@@ -41,6 +41,10 @@ To see all the debugging output, use the --log command line option like this:
 vncserver --log=*:stdout:1000
 
 Change History:
+
+Version 1.32, September 2019: Add the CapUpdateLines option to check for changes in smaller slivers of screen.  It gives you faster responses to mouse movements and less CPU and memory and network bandwidth, at the expense of a slower overall whole screen update rate.
+
+Version 1.31, April 2019: Add the HideUpCounter option to hide the frame counter display (that little box with a number in the top left corner of the screen) by moving the underlying small window almost completely off screen.
 
 Version 1.30, October 2018: Fixed to work with Haiku R1B1.  The select() call is fussier, so now count up the number of FDs we're actually using rather than asking it to select() the maximum number possible.
 

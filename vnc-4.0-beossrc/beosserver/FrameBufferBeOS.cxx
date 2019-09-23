@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.23 2019/04/06 21:36:34 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.24 2019/09/23 13:52:01 agmsmith Exp $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,47 +22,51 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.24  2019/09/23 13:52:01  agmsmith
+ * Better wording for the HideUpCounter option.
+ *
  * Revision 1.23  2019/04/06 21:36:34  agmsmith
  * Add an option to hide the update counter display by moving the underlying
  * window off screen.  Extra complications arrise with BDirectWindow not
- * working if it is too far off screen (in BeOS), so make it just barely
- * touch the edge of the screen (rightmost X is zero).
+ * working if it is too far off screen (in BeOS), so make it just barely touch
+ * the edge of the screen (rightmost X is zero).
  *
  * Revision 1.22  2013/02/19 20:47:56  agmsmith
- * Add a full range gray scale palette so that the technical problems
- * picture has a smoother gradient.
+ * Add a full range gray scale palette so that the technical problems picture
+ * has a smoother gradient.
  *
  * Revision 1.21  2013/02/19 03:16:30  agmsmith
- * Ignore B_DIRECT_MODIFY messages about clipping and other stuff
- * we don't care about.
+ * Ignore B_DIRECT_MODIFY messages about clipping and other stuff we don't care
+ * about.
  *
  * Revision 1.20  2013/02/18 23:00:07  agmsmith
- * Don't overwrite the screen size when displaying the technical problems
- * dummy screen.  So now it will go back to the correct size once the
- * problems are done.
+ * Don't overwrite the screen size when displaying the technical problems dummy
+ * screen.  So now it will go back to the correct size once the problems are
+ * done.
  *
  * Revision 1.19  2013/02/12 22:54:13  agmsmith
  * Restrict colours to gray in the BeOS palette for the technical difficulties.
  *
  * Revision 1.18  2013/02/12 22:18:33  agmsmith
- * Add a gradient bitmap for when no screen buffer is available,
- * add a timeout to locking the frame buffer so that Haiku can
- * work with its 0.5 second processing time limit.
+ * Add a gradient bitmap for when no screen buffer is available, add a timeout
+ * to locking the frame buffer so that Haiku can work with its 0.5 second
+ * processing time limit.
  *
  * Revision 1.17  2013/02/05 22:45:39  agmsmith
  * Added some debugging of the BDirect callbacks - duration and state.
  *
  * Revision 1.16  2013/01/31 22:55:01  agmsmith
- * Add a default case for BDirect callbacks, just in case it sends us something new.
+ * Add a default case for BDirect callbacks, just in case it sends us something
+ * new.
  *
  * Revision 1.15  2005/02/27 20:25:05  agmsmith
  * Needed a header file that PPC version auto-includes.
  *
  * Revision 1.14  2005/02/27 20:20:16  agmsmith
- * Added a safer shutdown for the BDirectWindow window, crashed on PPC
- * when an external thread tried to close it.  Also added big-endian
- * video modes, though the bit order is likely wrong since VNC also
- * compensates for big-endian machines itself.  The end result looks OK.
+ * Added a safer shutdown for the BDirectWindow window, crashed on PPC when an
+ * external thread tried to close it.  Also added big-endian video modes,
+ * though the bit order is likely wrong since VNC also compensates for
+ * big-endian machines itself.  The end result looks OK.
  *
  * Revision 1.13  2005/02/12 19:47:24  agmsmith
  * Moved the two different colour palette structures into the
@@ -78,16 +82,16 @@
  * Add a log message for BScreen.
  *
  * Revision 1.9  2005/02/06 23:24:33  agmsmith
- * Added a generic status window feature so that even the
- * BScreen approach gets a status window.
+ * Added a generic status window feature so that even the BScreen approach gets
+ * a status window.
  *
  * Revision 1.8  2005/02/06 21:31:13  agmsmith
  * Split frame buffer class into two parts, one for the old BDirectWindow
  * screen reading technique, and another for the new BScreen method.
  *
  * Revision 1.7  2004/12/13 03:13:39  agmsmith
- * Found the 8 bit mode problem - the colour palette uses
- * 16 bit values for R, G, B components, not 8 bit.
+ * Found the 8 bit mode problem - the colour palette uses 16 bit values for R,
+ * G, B components, not 8 bit.
  *
  * Revision 1.6  2004/11/27 22:52:42  agmsmith
  * Not much - display string should be shorter.
@@ -96,12 +100,12 @@
  * Updated to work with VNC 4.0 source code (was 4.0 beta 4).
  *
  * Revision 1.4  2004/06/27 20:31:44  agmsmith
- * Got it working, so you can now see the desktop in different
- * video modes (except 8 bit).  Even lets you switch screens!
+ * Got it working, so you can now see the desktop in different video modes
+ * (except 8 bit).  Even lets you switch screens!
  *
  * Revision 1.3  2004/06/07 01:06:50  agmsmith
- * Starting to get the SDesktop working with the frame buffer
- * and a BDirectWindow.
+ * Starting to get the SDesktop working with the frame buffer and a
+ * BDirectWindow.
  *
  * Revision 1.2  2004/02/08 21:13:34  agmsmith
  * BDirectWindow stuff under construction.
@@ -140,12 +144,12 @@
 
 static rfb::LogWriter vlog("FrameBufferBeOS");
 
-static rfb::BoolParameter HideUpdateCounter("HideUpCounter",
-  "Hides the little number in the top left corner of the screen which shows "
-  "the number of updates completed so far.  Was more useful in dial-up days "
-  "when it took a while for updates to complete; with modern networks it "
-  "just increments in a blur.  But it does give you a visible sign when "
-  "someone has connected to your computer",
+static rfb::BoolParameter HideUpCounter("HideUpCounter",
+  "Hides the little number counting up in the top left corner of the screen "
+  "which shows the number of full screen updates completed so far.  Was more "
+  "useful in dial-up days when it took a while for updates to complete; with "
+  "modern networks it just increments in a blur.  But it does give you a "
+  "visible sign when someone has connected to your computer",
   false);
 
 
@@ -313,7 +317,7 @@ BDirectWindowReader::BDirectWindowReader (color_map *ColourMapPntr)
   m_ScreenSize = ScreenInfo.Frame ();
   MoveTo (m_ScreenSize.left, m_ScreenSize.top);
   ResizeTo (100, 22); // A small window so it doesn't obscure the desktop.
-  if (HideUpdateCounter)
+  if (HideUpCounter)
   {
     // Move window off screen, but barely touching (doesn't work properly for
     // BDirectWindow - no frame buffer - if right edge is at minus 1 instead of
@@ -815,7 +819,7 @@ FrameBufferBScreen::FrameBufferBScreen ()
   m_StatusWindowPntr->ResizeTo (100, 22);
   m_StatusWindowPntr->Show (); // Opens the window and starts its thread.
 
-  if (HideUpdateCounter)
+  if (HideUpCounter)
   {
     // Move window almost off screen, just barely touching.  It's still there
     // to get clipboard events etc.
