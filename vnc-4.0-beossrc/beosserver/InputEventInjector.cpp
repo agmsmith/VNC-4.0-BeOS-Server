@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.5 2018/01/10 22:17:25 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.6 2019/10/07 23:26:26 agmsmith Exp $
  *
  * This is the add-in (shared .so library for BeOS) which injects keyboard and
  * mouse events into the BeOS InputServer, letting the remote system move the
@@ -32,6 +32,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: InputEventInjector.cpp,v $
+ * Revision 1.6  2019/10/07 23:26:26  agmsmith
+ * Minor changes to get things compiling in Haiku 64 bit mode.
+ *
  * Revision 1.5  2018/01/10 22:17:25  agmsmith
  * Bumped version number for New Haiku (2018) build.
  *
@@ -68,14 +71,19 @@
 extern "C" _EXPORT BInputServerDevice* instantiate_input_device (void);
 
 const char InputEventInjectorVersionString [] =
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.5 2018/01/10 22:17:25 agmsmith Exp $";
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/InputEventInjector.cpp,v 1.6 2019/10/07 23:26:26 agmsmith Exp $";
 
+
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wwrite-strings"
 static struct input_device_ref FakeKeyboardLink =
 {
   "InputEventInjector FakeKeyboard", // Max 31 characters to be safe.
   B_KEYBOARD_DEVICE,
   (void *) 76543210 /* cookie */
 };
+#pragma GCC diagnostic pop
 
 static struct input_device_ref *RegistrationRefList [2] =
 {
@@ -125,7 +133,7 @@ status_t InputEventInjector::InitCheck ()
 
 status_t InputEventInjector::Start (const char *device, void *cookie)
 {
-  if ((int) cookie == 76543210)
+  if ((long) cookie == 76543210)
     m_KeyboardEnabled = true;
   else
     return B_ERROR;
@@ -136,7 +144,7 @@ status_t InputEventInjector::Start (const char *device, void *cookie)
 
 status_t InputEventInjector::Stop (const char *device, void *cookie)
 {
-  if ((int) cookie == 76543210)
+  if ((long) cookie == 76543210)
     m_KeyboardEnabled = false;
   else
     return B_ERROR;
@@ -153,7 +161,7 @@ status_t InputEventInjector::Control (
 {
   BMessage *EventMsgPntr = NULL;
 
-  if ((int) cookie == 76543210)
+  if ((long) cookie == 76543210)
   {
     if (m_KeyboardEnabled && code == 'EInj' && message != NULL)
     {

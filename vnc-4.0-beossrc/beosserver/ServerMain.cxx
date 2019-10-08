@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.32 2019/09/23 15:21:30 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.33 2019/10/07 23:26:26 agmsmith Exp $
  *
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.33  2019/10/07 23:26:26  agmsmith
+ * Minor changes to get things compiling in Haiku 64 bit mode.
+ *
  * Revision 1.32  2019/09/23 15:21:30  agmsmith
  * Added CapUpdateLines option and changed some wording.
  *
@@ -190,7 +193,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.32 2019/09/23 15:21:30 agmsmith Exp $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.33 2019/10/07 23:26:26 agmsmith Exp $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -330,7 +333,7 @@ void ServerApp::MessageReceived (BMessage *MessagePntr)
     else if (MessagePntr->what == B_CLIPBOARD_CHANGED)
     {
       BMessage   *ClipMsgPntr;
-      int32       TextLength;
+      ssize_t     TextLength;
       const char *TextPntr;
 
       if (m_VNCServerPntr != NULL && be_clipboard->Lock())
@@ -606,7 +609,7 @@ int main (int argc, char** argv)
       usage(argv[0]);
     }
 
-    vlog.info ("Starting vncserver, $Revision: 1.32 $, was compiled on "
+    vlog.info ("Starting vncserver, $Revision: 1.33 $, was compiled on "
       __DATE__ " at " __TIME__ ".", argv[0]);
 
     // Set the priority of the main polling thread.  If it's normal, than some

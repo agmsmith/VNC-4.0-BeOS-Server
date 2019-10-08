@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.41 2019/09/23 15:21:30 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/SDesktopBeOS.cxx,v 1.42 2019/10/07 23:26:26 agmsmith Exp $
  *
  * This is the static desktop glue implementation that holds the frame buffer
  * and handles mouse messages, the clipboard and other BeOS things on one side,
@@ -27,6 +27,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: SDesktopBeOS.cxx,v $
+ * Revision 1.42  2019/10/07 23:26:26  agmsmith
+ * Minor changes to get things compiling in Haiku 64 bit mode.
+ *
  * Revision 1.41  2019/09/23 15:21:30  agmsmith
  * Added CapUpdateLines option and changed some wording.
  *
@@ -806,7 +809,6 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
   rfb::PixelFormat OldScreenFormat;
   int              OldUpdateSize = 0;
   rfb::Rect        RectangleToUpdate;
-  unsigned int     ScreenFormatSerialNumber;
   char             TempString [30];
   static int       UpdateCounter = 0;
   float            UpdatesPerSecond = 0;
@@ -817,7 +819,7 @@ void SDesktopBeOS::BackgroundScreenUpdateCheck ()
   (Height = m_FrameBufferBeOSPntr->height ()) <= 0)
     return;
 
-  ScreenFormatSerialNumber = m_FrameBufferBeOSPntr->LockFrameBuffer ();
+  m_FrameBufferBeOSPntr->LockFrameBuffer ();
 
   try
   {

@@ -2,9 +2,10 @@ Short: VNC Remote Screen and Keyboard access for BeOS and Haiku OS.
 Author: agmsmith@ncf.ca (Alexander G. M. Smith)
 Uploader: agmsmith@ncf.ca (Alexander G. M. Smith)
 Website: http://web.ncf.ca/au829/
-Version: 4.0-BeOS-AGMS-1.32
+Source: https://github.com/agmsmith/VNC-4.0-BeOS-Server
+Version: 4.0-BeOS-AGMS-1.33
 Type: Internet & Network / Servers / Remote Access
-Requires: BeOS R5 (Intel or PowerPC) or Haiku OS R1 (x86 32 bit, gcc2 build)
+Requires: BeOS R5 (Intel or PowerPC) or Haiku OS R1 (x86 32 bit gcc2 build, or x86 64 bit gcc7 build)
 
 VNCServer lets you use your BeOS or Haiku computer from anywhere there is an Internet connection.  You can think of it as a really long keyboard, mouse and video cable.  A VNC client (available elsewhere for Windows, Mac, Linux, others) shows you the BeOS screen and sends keystrokes and mouse actions to your BeOS system over the Internet.  The VNCServer software running on BeOS/Haiku takes that data from the client, and simulates button presses on a fake keyboard and movements of an imaginary mouse.  In the opposite direction, it scans your BeOS/Haiku screen for changes, compresses the resulting graphics data and transmits it to the client.
 
@@ -42,6 +43,8 @@ vncserver --log=*:stdout:1000
 
 Change History:
 
+Version 1.33, October 2019: Get things compiling in 64 bit Haiku OS too.
+
 Version 1.32, September 2019: Add the CapUpdateLines option to check for changes in smaller slivers of screen.  It gives you faster responses to mouse movements and less CPU and memory and network bandwidth, at the expense of a slower overall whole screen update rate.
 
 Version 1.31, April 2019: Add the HideUpCounter option to hide the frame counter display (that little box with a number in the top left corner of the screen) by moving the underlying small window almost completely off screen.
@@ -68,4 +71,4 @@ Fake cursor now defaults to off, because Haiku R1A4 doesn't have hardware cursor
 
 Version 1.22, November 2011: The fake cross cursor is now on by default ("vncserver ShowCheapCursor=1") and it has been changed to a larger and more colourful shape for better visibility when using an iPad VNC client.
 
-- Alex (Ottawa, October 2018)
+- Alex (Ottawa, October 2019)

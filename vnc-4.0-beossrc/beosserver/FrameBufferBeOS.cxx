@@ -1,5 +1,5 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.24 2019/09/23 13:52:01 agmsmith Exp $
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/FrameBufferBeOS.cxx,v 1.25 2019/10/07 23:26:26 agmsmith Exp $
  *
  * This is the frame buffer access module for the BeOS version of the VNC
  * server.  It implements an rfb::FrameBuffer object, which opens a
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: FrameBufferBeOS.cxx,v $
+ * Revision 1.25  2019/10/07 23:26:26  agmsmith
+ * Minor changes to get things compiling in Haiku 64 bit mode.
+ *
  * Revision 1.24  2019/09/23 13:52:01  agmsmith
  * Better wording for the HideUpCounter option.
  *
@@ -781,8 +784,8 @@ unsigned int FrameBufferBDirect::UpdatePixelFormatEtc ()
   char TempString [2048];
   sprintf (TempString,
     "UpdatePixelFormatEtc new settings: "
-    "Width=%d, Stride=%d, Height=%d, Bits at $%08X, ",
-    width_, m_CachedStride, height_, (unsigned int) data);
+    "Width=%d, Stride=%d, Height=%d, Bits at $%08lX, ",
+    width_, m_CachedStride, height_, (unsigned long) data);
   format.print (TempString + strlen (TempString),
     sizeof (TempString) - strlen (TempString));
   vlog.debug (TempString);
@@ -1022,8 +1025,8 @@ unsigned int FrameBufferBScreen::UpdatePixelFormatEtc ()
   char TempString [2048];
   sprintf (TempString,
     "UpdatePixelFormatEtc new settings: "
-    "Width=%d, Stride=%d, Height=%d, Bits at $%08X, ",
-    width_, m_CachedStride, height_, (unsigned int) data);
+    "Width=%d, Stride=%d, Height=%d, Bits at $%08lX, ",
+    width_, m_CachedStride, height_, (unsigned long) data);
   format.print (TempString + strlen (TempString),
     sizeof (TempString) - strlen (TempString));
   vlog.debug (TempString);
