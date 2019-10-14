@@ -3,7 +3,7 @@ Author: agmsmith@ncf.ca (Alexander G. M. Smith)
 Uploader: agmsmith@ncf.ca (Alexander G. M. Smith)
 Website: http://web.ncf.ca/au829/
 Source: https://github.com/agmsmith/VNC-4.0-BeOS-Server
-Version: 4.0-BeOS-AGMS-1.33
+Version: 4.0-BeOS-AGMS-1.34
 Type: Internet & Network / Servers / Remote Access
 Requires: BeOS R5 (Intel or PowerPC) or Haiku OS R1 (x86 32 bit gcc2 build, or x86 64 bit gcc7 build)
 
@@ -83,6 +83,12 @@ To see all the debugging output, use the --log command line option like this:
 vncserver --log=*:stdout:1000
 
 Change History:
+
+Version 1.34, October 2019: Increase a size limit so it can handle 8K pixel
+wide screens.  Formerly it was limited to 2048 pixels wide, which is barely
+enough for High Definition 1920x1080 screen sizes.  Comes in useful for
+multiple monitor support in virtual machines too (make a really wide virtual
+screen then use VNC to display it over the host's multiple monitor screens).
 
 Version 1.33, October 2019: Get things compiling in 64 bit Haiku OS too.
 
