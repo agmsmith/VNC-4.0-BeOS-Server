@@ -1,6 +1,6 @@
 /******************************************************************************
- * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.33 2019/10/07 23:26:26 agmsmith Exp $
- *
+ * $Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.34 2019/10/12 21:13:52 agmsmith Exp $
+ * 
  * This is the main program for the BeOS version of the VNC server.  The basic
  * functionality comes from the VNC 4.0b4 source code (available from
  * http://www.realvnc.com/), with BeOS adaptations by Alexander G. M. Smith.
@@ -22,6 +22,9 @@
  * Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * $Log: ServerMain.cxx,v $
+ * Revision 1.34  2019/10/12 21:13:52  agmsmith
+ * Boost ZRLE compression buffer to handle 8K pixel scan lines.
+ *
  * Revision 1.33  2019/10/07 23:26:26  agmsmith
  * Minor changes to get things compiling in Haiku 64 bit mode.
  *
@@ -193,7 +196,7 @@ static const char *g_AppSignature =
 static const char *g_AboutText =
   "VNC Server for BeOS, based on VNC 4.0 from RealVNC http://www.realvnc.com/\n"
   "Adapted for BeOS by Alexander G. M. Smith\n"
-  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.33 2019/10/07 23:26:26 agmsmith Exp $\n"
+  "$Header: /CommonBe/agmsmith/Programming/VNC/vnc-4.0-beossrc/beosserver/RCS/ServerMain.cxx,v 1.34 2019/10/12 21:13:52 agmsmith Exp $\n"
   "Compiled on " __DATE__ " at " __TIME__ ".";
 
 static const int k_DeadManPulseTimer = 3000000;
@@ -609,7 +612,7 @@ int main (int argc, char** argv)
       usage(argv[0]);
     }
 
-    vlog.info ("Starting vncserver, $Revision: 1.33 $, was compiled on "
+    vlog.info ("Starting vncserver, $Revision: 1.34 $, was compiled on "
       __DATE__ " at " __TIME__ ".", argv[0]);
 
     // Set the priority of the main polling thread.  If it's normal, than some

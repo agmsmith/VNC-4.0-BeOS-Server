@@ -27,7 +27,7 @@
 using namespace rfb;
 
 rdr::MemOutStream* ZRLEEncoder::sharedMos = 0;
-int ZRLEEncoder::maxLen = 513 * 1024; // enough for width 2048 32-bit pixels
+int ZRLEEncoder::maxLen = 513 * 4096; // enough for width 8192 32-bit pixels
 
 IntParameter zlibLevel("ZlibLevel","Zlib compression level",-1);
 
